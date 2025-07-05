@@ -1,0 +1,226 @@
+{
+  "title": "The Caves of Chaos - TSR Basic D&D Solo Adventure",
+  "description": "A solo adventure for beginning characters, featuring the search for Bargle the bandit in mysterious caves near a small village.",
+  "settingInfo": "Your home town is just a small place with dirt roads. The nearby hills contain several caves where treasures can be found, guarded by monsters. The bandit Bargle has been stealing money, killing people, and terrorizing your town.",
+  "hooks": [
+    "Find Bargle the bandit who has been terrorizing your village",
+    "Explore the dangerous caves in the nearby hills",
+    "Discover treasure guarded by monsters",
+    "Become a hero by bringing peace to your village"
+  ],
+  "locations": [
+    {
+      "id": "village",
+      "name": "Your Home Village",
+      "description": "A small frontier village with dirt roads. Home to simple folk including Armorer Baldwick who has known you since childhood.",
+      "type": "town",
+      "features": ["Baldwick's Armor Shop", "Village Inn", "Simple houses"],
+      "connections": ["cave_entrance"],
+      "secrets": {
+        "childhood_memories": "You used to snitch apples from Baldwick's yard"
+      }
+    },
+    {
+      "id": "cave_entrance", 
+      "name": "Cave Entrance",
+      "description": "The entrance to a dark cave system in the nearby hills. It's usually peaceful outside, but danger lurks within the darkness.",
+      "type": "wilderness",
+      "features": ["Rocky entrance", "Natural light", "Peaceful surroundings"],
+      "connections": ["village", "first_corridor"],
+      "secrets": {
+        "ambush_site": "Goblins often scout this area"
+      }
+    },
+    {
+      "id": "first_corridor",
+      "name": "Dark Corridor",
+      "description": "A dark, musty passage leading deeper into the hill. A single route inward with no side passages initially visible.",
+      "type": "dungeon",
+      "features": ["Dark and musty", "Single passage", "Echo of footsteps"],
+      "connections": ["cave_entrance", "snake_chamber"],
+      "secrets": {}
+    },
+    {
+      "id": "snake_chamber",
+      "name": "Snake's Treasure Chamber", 
+      "description": "A wider chamber containing a huge rattlesnake nearly ten feet long. Hundreds of gold and silver coins are scattered on the floor near it.",
+      "type": "dungeon",
+      "features": ["Treasure scattered on floor", "Dark corners", "Musty air"],
+      "connections": ["first_corridor", "aleena_chamber"],
+      "secrets": {
+        "treasure_origin": "Coins belonged to someone who failed to kill the snake",
+        "hidden_gem": "A pearl is hidden in one corner worth 100 gp"
+      }
+    },
+    {
+      "id": "aleena_chamber",
+      "name": "Aleena's Meditation Chamber",
+      "description": "A small cave where Aleena the cleric sits by the wall, wearing chain mail and carrying a mace. A lit lantern rests beside her.",
+      "type": "dungeon", 
+      "features": ["Natural meditation spot", "Stone walls", "Peaceful atmosphere"],
+      "connections": ["snake_chamber", "ghoul_corridor"],
+      "secrets": {
+        "safe_haven": "Clerics often use this spot for prayer and rest"
+      }
+    },
+    {
+      "id": "ghoul_corridor",
+      "name": "Ghoul-Haunted Side Passage",
+      "description": "A side corridor where four beast-like undead creatures lurk in the shadows, waiting for victims to pass by.",
+      "type": "dungeon",
+      "features": ["Branching passage", "Deep shadows", "Unnatural silence"],
+      "connections": ["aleena_chamber", "locked_door_area"],
+      "secrets": {
+        "undead_nature": "Ghouls are creatures of darkness who avoid sunlight"
+      }
+    },
+    {
+      "id": "locked_door_area",
+      "name": "Mysterious Locked Door",
+      "description": "A sturdy wooden door with heavy iron bands and a large keyhole. The door resists all attempts to force it open.",
+      "type": "dungeon",
+      "features": ["Heavy wooden door", "Iron reinforcement", "Secure lock"],
+      "connections": ["ghoul_corridor", "bargle_chamber"],
+      "secrets": {
+        "treasure_within": "Valuable treasure waits beyond for those with the right skills"
+      }
+    },
+    {
+      "id": "bargle_chamber",
+      "name": "Bargle's Lair",
+      "description": "A room where Bargle the magic-user plots with his goblin servant. Magical light illuminates this chamber of evil.",
+      "type": "dungeon",
+      "features": ["Magical illumination", "Stone chamber", "Plotting area"],
+      "connections": ["locked_door_area", "exit_passage"],
+      "secrets": {
+        "magic_items": "Bargle carries magical treasures including potions",
+        "escape_route": "Secret knowledge of cave exits"
+      }
+    },
+    {
+      "id": "exit_passage",
+      "name": "Hidden Exit",
+      "description": "A side passage leading to sunlight and safety. This secret exit is known only to those who explore thoroughly.",
+      "type": "wilderness",
+      "features": ["Natural light", "Fresh air", "Hidden entrance"],
+      "connections": ["bargle_chamber", "village"],
+      "secrets": {}
+    }
+  ],
+  "npcs": [
+    {
+      "id": "baldwick",
+      "name": "Armorer Baldwick",
+      "race": "Human",
+      "occupation": "Armorer and Shopkeeper",
+      "personality": "Jolly, graying, friendly but business-minded",
+      "motivation": "Make a living selling quality armor and weapons",
+      "appearance": "Gray-haired, robust armorer with friendly demeanor",
+      "knowledge": ["Armor types and prices", "Local gossip", "Character's childhood"],
+      "relationships": {
+        "player": "childhood_acquaintance"
+      }
+    },
+    {
+      "id": "aleena",
+      "name": "Aleena the Cleric",
+      "race": "Human", 
+      "occupation": "Cleric and Adventurer",
+      "personality": "Wise, helpful, brave, and devout",
+      "motivation": "Help others and fight evil monsters",
+      "appearance": "Beautiful woman in chain mail carrying a mace",
+      "knowledge": ["Clerical magic", "Monster lore", "Healing arts", "Undead creatures"],
+      "relationships": {
+        "player": "potential_ally"
+      }
+    },
+    {
+      "id": "bargle",
+      "name": "Bargle the Bandit",
+      "race": "Human",
+      "occupation": "Evil Magic-User and Bandit",
+      "personality": "Chaotic, selfish, cunning, and dangerous",
+      "motivation": "Gain power and treasure through theft and murder", 
+      "appearance": "Tall bearded human in black robes",
+      "knowledge": ["Arcane magic", "Invisibility spells", "Charm spells", "Local area"],
+      "relationships": {
+        "player": "primary_enemy",
+        "goblin_servant": "master"
+      }
+    }
+  ],
+  "encounters": [
+    {
+      "id": "first_goblin",
+      "name": "Goblin Ambush",
+      "type": "combat",
+      "description": "A small goblin with gray skin attacks immediately upon seeing you, wielding a crude sword.",
+      "trigger": "Entering the first corridor",
+      "challengeRating": 1,
+      "creatures": ["Goblin (wounded, 1 hp)"],
+      "tactics": {
+        "approach": "Immediate attack",
+        "behavior": "Flees when hit",
+        "hit_target": "12+ on d20"
+      }
+    },
+    {
+      "id": "giant_snake",
+      "name": "Poisonous Rattlesnake",
+      "type": "combat",
+      "description": "A huge rattlesnake, almost ten feet long, guards a treasure hoard. Its bite is poisonous.",
+      "trigger": "Entering the snake chamber",
+      "challengeRating": 2,
+      "creatures": ["Giant Rattlesnake (3 hp)"],
+      "tactics": {
+        "approach": "Defensive of treasure",
+        "behavior": "Poisonous bite attack",
+        "hit_target": "11+ on d20",
+        "special": "Poison save 12+ or take 2 extra damage"
+      }
+    },
+    {
+      "id": "ghoul_pack",
+      "name": "Undead Ghouls",
+      "type": "avoidable_combat",
+      "description": "Four beast-like undead creatures lurk in unnatural silence, waiting to paralyze victims.",
+      "trigger": "Exploring side corridor",
+      "challengeRating": 4,
+      "creatures": ["Ghoul x4"],
+      "tactics": {
+        "approach": "Silent ambush",
+        "behavior": "Paralyzing touch",
+        "special": "Can be turned by clerics"
+      }
+    },
+    {
+      "id": "bargle_final",
+      "name": "Confrontation with Bargle",
+      "type": "boss_combat", 
+      "description": "The evil magic-user Bargle fights alongside his goblin servant, using invisibility and charm spells.",
+      "trigger": "Entering Bargle's chamber",
+      "challengeRating": 3,
+      "creatures": ["Bargle the Magic-User", "Goblin Servant (2 hp)"],
+      "tactics": {
+        "bargle_spells": "Invisibility, Charm Person, Magic Missile",
+        "strategy": "Uses magic tactically",
+        "goblin_role": "Distraction and melee"
+      }
+    }
+  ],
+  "treasures": [
+    "Hundreds of gold and silver coins (exact: 50 gp, 100 sp, 20 ep, 7 pp)",
+    "Hidden pearl worth 100 gp",
+    "Potion of Healing (from church reward)",
+    "Potion of Growth (in Bargle's black velvet bag)",
+    "Assorted gems in Bargle's pouch",
+    "Few copper pieces from goblin"
+  ],
+  "lore": {
+    "Bargle": "A chaotic magic-user who has been terrorizing the village through theft and murder",
+    "Combat_System": "Roll d20, need 12+ to hit goblin, 11+ to hit snake. Player has 8 hp, AC 4 (with chain mail)",
+    "Character_Stats": "Strength 17 (+2 bonus), Dexterity 11, Intelligence 9, Wisdom 8, Constitution 16, Charisma 14",
+    "Magic_System": "Clerics can cast healing spells and turn undead. Magic-users have invisibility and charm spells",
+    "Death_and_Healing": "0 hp means death. Clerics can magically heal wounds. Rest heals damage over time"
+  }
+}

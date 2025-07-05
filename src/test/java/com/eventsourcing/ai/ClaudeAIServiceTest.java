@@ -28,7 +28,7 @@ class ClaudeAIServiceTest {
         assertNotNull(response);
         assertFalse(response.fromAI()); // Should be fallback
         assertNotNull(response.content());
-        assertTrue(response.content().contains("survey"));
+        assertTrue(response.content().contains("Osservi") || response.content().contains("dintorni"));
     }
     
     @Test

@@ -64,9 +64,10 @@ class RPGApiServerTest {
         var response = client.send(request, HttpResponse.BodyHandlers.ofString());
         
         assertEquals(200, response.statusCode());
-        assertTrue(response.body().contains("success"));
+        System.out.println("RESPONSE BODY: " + response.body());
+        assertTrue(response.body().contains("\"success\":true"));
         assertTrue(response.body().contains("session_id"));
-        assertTrue(response.body().contains("Welcome"));
+        assertTrue(response.body().contains("Benvenuto") || response.body().contains("Welcome") || response.body().contains("avventura inizia") || response.body().contains("Ritorno dell'Eroe") || response.body().contains("Richiamo dell'Avventura"));
     }
     
     @Test

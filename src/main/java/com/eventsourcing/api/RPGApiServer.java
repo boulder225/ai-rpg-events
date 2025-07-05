@@ -3,6 +3,7 @@ package com.eventsourcing.api;
 import com.eventsourcing.rpg.*;
 import com.eventsourcing.core.infrastructure.InMemoryEventStore;
 import com.eventsourcing.ai.*;
+import com.eventsourcing.dnd.DnDAdventureLoader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -28,6 +29,8 @@ public class RPGApiServer {
     private final ObjectMapper objectMapper;
     private final Map<String, String> activeSessions;
     private final RPGMetrics metrics;
+    private final DnDAdventureLoader adventureLoader;
+    private final DnDAdventureLoader.Adventure currentAdventure;
     
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
@@ -43,6 +46,15 @@ public class RPGApiServer {
         this.objectMapper = new ObjectMapper();
         this.activeSessions = new HashMap<>();
         this.metrics = new RPGMetrics();
+        
+        // Load TSR Basic D&D Adventure context
+        this.adventureLoader = new DnDAdventureLoader();
+        this.currentAdventure = adventureLoader.loadTSRBasicAdventure();
+        
+        System.out.println("📜 Loaded Adventure: " + currentAdventure.title());
+        System.out.println("🏰 Adventure Locations: " + currentAdventure.locations().size());
+        System.out.println("👥 Adventure NPCs: " + currentAdventure.npcs().size());
+        System.out.println("⚔️ Adventure Encounters: " + currentAdventure.encounters().size());
         
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         setupRoutes();
@@ -127,9 +139,13 @@ public class RPGApiServer {
                 
                 metrics.incrementSessions();
                 
-                // Generate welcome message with AI
-                var context = String.format("New player %s has entered the world", request.playerName);
-                var aiResponse = aiService.generateGameMasterResponse(context, "player joins adventure");
+                // Generate contextual welcome with full adventure knowledge
+                var adventureContext = adventureLoader.generateAdventureContext(currentAdventure, "village");
+                var welcomePrompt = String.format(
+                    "New player %s has just arrived in their home village. They are a brave fighter " +
+                    "seeking the bandit Bargle who has been terrorizing the area. Full context: %s", 
+                    request.playerName, adventureContext);
+                var aiResponse = aiService.generateGameMasterResponse(welcomePrompt, "starting TSR Basic D&D adventure");
                 
                 var welcomeMessage = aiResponse.isSuccess() ? 
                     aiResponse.content() : 
@@ -376,10 +392,20 @@ public class RPGApiServer {
     
     private String generateGameContextForAI(RPGState.PlayerState playerState) {
         var context = new StringBuilder();
-        context.append("CURRENT GAME STATE:\n");
-        context.append("- Player Location: ").append(playerState.currentLocationId()).append("\n");
-        context.append("- Player Health: ").append(playerState.health()).append("/100\n");
-        context.append("- Active Quests: ").append(playerState.activeQuests().size()).append("\n");
+        
+        // Add TSR Basic D&D Adventure context first
+        context.append("=== TSR BASIC D&D ADVENTURE CONTEXT ===\n");
+        context.append(adventureLoader.generateAdventureContext(currentAdventure, 
+            playerState.currentLocationId() != null ? playerState.currentLocationId() : "village")).append("\n");
+        
+        // Add character context
+        context.append("=== CHARACTER STATUS ===\n");
+        context.append("- Player Location: ").append(playerState.currentLocationId() != null ? playerState.currentLocationId() : "village").append("\n");
+        context.append("- Player Health: ").append(playerState.health()).append("/8 hp\n");
+        context.append("- Character Class: Fighter\n");
+        context.append("- Equipment: Chain Mail (AC 4), Sword, Dagger, Lantern\n");
+        context.append("- Ability Scores: STR 17 (+2), DEX 11, INT 9, WIS 8, CON 16, CHA 14\n");
+        context.append("- Active Quests: Find Bargle the bandit\n");
         context.append("- Known NPCs: ").append(playerState.relationships().size()).append("\n");
         context.append("- Total Actions Taken: ").append(playerState.actionHistory().size()).append("\n\n");
         
@@ -402,7 +428,11 @@ public class RPGApiServer {
                        .append(": ").append(rel.relationType())
                        .append(" (trust: ").append(rel.trustLevel()).append(")\n");
             });
+            context.append("\n");
         }
+        
+        // Add D&D rules context
+        context.append(adventureLoader.generateRulesContext());
         
         return context.toString();
     }
