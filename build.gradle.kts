@@ -30,7 +30,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.eventsourcing.rpg.RPGDemo")
+    mainClass.set("com.eventsourcing.api.RPGServerLauncher")
 }
 
 repositories {

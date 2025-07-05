@@ -1,16 +1,111 @@
 # AI-RPG Event Sourcing Platform
 
-A minimalistic event sourcing codebase designed for AI-powered RPG platforms with autonomous agents, persistent worlds, and evolving character relationships.
+A comprehensive event sourcing platform for AI-powered RPG games with autonomous agents, persistent worlds, and evolving character relationships.
 
-## Core Concepts
+## 🚀 Quick Start
 
-This system models the persistent narrative context for AI-RPG platforms where:
+### Setup Claude AI (Optional)
 
-- **Autonomous AI agents** (GMs, NPCs, monsters) operate with complete situational awareness
-- **Persistent worlds** continue evolving when players are offline
-- **Dynamic relationships** track trust, friendship, and social networks between entities
-- **Complete action history** provides context for intelligent AI decision-making
-- **Time-travel queries** enable point-in-time state reconstruction
+1. **Get your Claude API key** from [Anthropic Console](https://console.anthropic.com/)
+
+2. **Create environment file:**
+```bash
+cp .env.example .env
+```
+
+3. **Add your Claude API key** to `.env`:
+```bash
+# Edit .env file
+CLAUDE_API_KEY=your_actual_api_key_here
+```
+
+4. **Configure AI settings** (optional):
+```bash
+# In .env file - Model options:
+# Claude 4 Models (Latest!):
+# claude-sonnet-4-20250514     (Claude 4 Sonnet - Best for RPGs!)
+# claude-opus-4-20250514       (Claude 4 Opus - Most powerful)
+#
+# Claude 3.5 Models:
+# claude-3-5-sonnet-20241022   (Claude 3.5 Sonnet - Proven)
+# claude-3-5-haiku-20241022    (Claude 3.5 Haiku - Fast)
+
+CLAUDE_MODEL=claude-sonnet-4-20250514  # Default: Claude 4 Sonnet!
+CLAUDE_MAX_TOKENS=1000
+CLAUDE_TEMPERATURE=0.7
+```
+
+### Run the API Server
+
+```bash
+# Build and start the server
+./gradlew run
+
+# Or specify a custom port
+./gradlew run --args="9000"
+```
+
+The server will start on `http://localhost:8080` with:
+- 🌐 **Interactive Web Interface** at `/`
+- 📚 **REST API** endpoints at `/api/*`
+- 🎮 **Complete RPG simulation** with event sourcing
+- 🤖 **Claude AI integration** (if configured) or intelligent fallbacks
+
+**AI Status:**
+- ✅ **Claude AI Enabled**: Real intelligent responses from Claude
+- ⚠️ **Simulation Mode**: Smart fallback responses (no API key needed)
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/session/create` | Create new adventure session |
+| POST | `/api/game/action` | Execute game actions with AI responses |
+| GET | `/api/game/status` | Get complete world state |
+| GET | `/api/ai/prompt` | View AI context prompt |
+| GET | `/api/metrics` | System performance metrics |
+| GET | `/` | Interactive web interface |
+
+### Example Usage
+
+```bash
+# Create a new adventure session
+curl -X POST http://localhost:8080/api/session/create \
+  -H "Content-Type: application/json" \
+  -d '{"player_id":"hero123","player_name":"Aria the Mystic"}'
+# Response includes AI-generated welcome message
+
+# Execute game actions with intelligent AI responses
+curl -X POST http://localhost:8080/api/game/action \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"your-session-id","command":"/look around"}'
+# AI analyzes full context and generates immersive descriptions
+
+# Talk to NPCs with dynamic personality-driven dialogue
+curl -X POST http://localhost:8080/api/game/action \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"your-session-id","command":"/talk tavern_keeper"}'
+# Claude generates contextual NPC responses based on relationship history
+
+# Get world state with AI insights
+curl "http://localhost:8080/api/game/status?session_id=your-session-id"
+
+# View complete AI context sent to Claude
+curl "http://localhost:8080/api/ai/prompt?session_id=your-session-id"
+
+# Monitor AI performance metrics
+curl "http://localhost:8080/api/metrics"
+```
+
+### Run Tests
+
+```bash
+# Run all tests including API integration tests
+./gradlew test
+
+# Run with coverage
+./gradlew jacocoTestReport
+```
 
 ## Architecture
 
