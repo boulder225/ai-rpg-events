@@ -46,10 +46,27 @@ CLAUDE_TEMPERATURE=0.7
 ```
 
 The server will start on `http://localhost:8080` with:
-- 🌐 **Interactive Web Interface** at `/`
-- 📚 **REST API** endpoints at `/api/*`
+- 📡 **REST API** endpoints at `/api/*`
 - 🎮 **Complete RPG simulation** with event sourcing
 - 🤖 **Claude AI integration** (if configured) or intelligent fallbacks
+- 🌐 **React Frontend** available separately (see Frontend Setup)
+
+### Frontend Setup (React)
+
+```bash
+# Start the React frontend (requires Node.js)
+./start-frontend.sh
+# Opens browser at http://localhost:3000
+
+# Or manually:
+cd frontend
+npm install
+npm start
+```
+
+**Two-Server Development:**
+1. **Backend API**: `./start-backend.sh` (port 8080)
+2. **React Frontend**: `./start-frontend.sh` (port 3000)
 
 **AI Status:**
 - ✅ **Claude AI Enabled**: Real intelligent responses from Claude
@@ -64,7 +81,6 @@ The server will start on `http://localhost:8080` with:
 | GET | `/api/game/status` | Get complete world state |
 | GET | `/api/ai/prompt` | View AI context prompt |
 | GET | `/api/metrics` | System performance metrics |
-| GET | `/` | Interactive web interface |
 
 ### Example Usage
 
@@ -180,8 +196,11 @@ Optimistic concurrency with retry logic ensures data consistency in multi-agent 
 ### Run the Demo
 
 ```bash
-# Build and run the demonstration
-./gradlew run
+# Start backend API server
+./start-backend.sh
+
+# Start React frontend (in another terminal)
+./start-frontend.sh
 
 # Run tests
 ./gradlew test

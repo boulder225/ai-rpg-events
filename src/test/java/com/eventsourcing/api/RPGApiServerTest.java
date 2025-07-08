@@ -70,20 +70,6 @@ class RPGApiServerTest {
     }
     
     @Test
-    void testWebInterfaceEndpoint() throws Exception {
-        var request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + TEST_PORT + "/"))
-            .GET()
-            .build();
-        
-        var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        
-        assertEquals(200, response.statusCode());
-        assertTrue(response.body().contains("AI-RPG Event Sourcing Platform"));
-        assertTrue(response.body().contains("html"));
-    }
-    
-    @Test
     void testMetricsEndpoint() throws Exception {
         var request = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:" + TEST_PORT + "/api/metrics"))
