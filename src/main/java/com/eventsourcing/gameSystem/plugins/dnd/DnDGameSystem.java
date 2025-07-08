@@ -208,4 +208,27 @@ public class DnDGameSystem implements GameSystem {
         
         return GameResponse.success(message, updatedContext);
     }
+
+    @Override
+    public String getAdventureContext(AdventureData adventure, String locationId) {
+        LocationData location = adventure.getLocation(locationId);
+        if (location == null) return "Unknown location.";
+        return String.format("You are at %s: %s\nFeatures: %s", location.name(), location.description(), String.join(", ", location.features()));
+    }
+
+    @Override
+    public String getRulesContext() {
+        return "D&D Basic Rules: Roll a d20 for actions, AC 4 = Chain Mail, 8 HP starting, classic fantasy classes and monsters.";
+    }
+
+    @Override
+    public Map<String, Object> getMetadata() {
+        return Map.of(
+            "systemName", getSystemName(),
+            "description", getSystemDescription(),
+            "quickCommands", getQuickCommands(),
+            "locations", getLocationData(),
+            "startingLocation", getStartingLocation()
+        );
+    }
 }

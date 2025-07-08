@@ -9,7 +9,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import com.eventsourcing.api.ApiModels.*;
-import com.eventsourcing.dnd.DnDAdventureLoader;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,8 +29,8 @@ public class RPGApiServer {
     private final ObjectMapper objectMapper;
     private final Map<String, String> activeSessions;
     private final RPGMetrics metrics;
-    private final DnDAdventureLoader adventureLoader;
-    private final DnDAdventureLoader.Adventure currentAdventure;
+    private final GameSystem gameSystem;
+    private final AdventureData currentAdventure;
     
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
@@ -48,10 +47,14 @@ public class RPGApiServer {
         this.activeSessions = new HashMap<>();
         this.metrics = new RPGMetrics();
         
-        // Load TSR Basic D&D Adventure context
-        this.adventureLoader = new DnDAdventureLoader();
-        this.currentAdventure = adventureLoader.loadTSRBasicAdventure();
+        // Initialize game system from configuration
+        Properties defaultConfig = new Properties();
+        defaultConfig.setProperty("game.system", "dnd");
+        defaultConfig.setProperty("game.adventure", "tsr_basic");
+        this.gameSystem = GameSystemFactory.createFromConfig(defaultConfig);
+        this.currentAdventure = gameSystem.loadAdventure(defaultConfig.getProperty("game.adventure", "tsr_basic"));
         
+        System.out.println("🎮 Game System: " + gameSystem.getSystemName());
         System.out.println("📜 Loaded Adventure: " + currentAdventure.title());
         System.out.println("🏰 Adventure Locations: " + currentAdventure.locations().size());
         System.out.println("👥 Adventure NPCs: " + currentAdventure.npcs().size());
@@ -80,6 +83,21 @@ public class RPGApiServer {
         server.createContext("/api/game/status", new GameStatusHandler());
         server.createContext("/api/ai/prompt", new AIPromptHandler());
         server.createContext("/api/metrics", new MetricsHandler());
+        server.createContext("/api/game/metadata", exchange -> {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, 0);
+                exchange.close();
+                return;
+            }
+            var metadata = gameSystem.getMetadata();
+            var json = objectMapper.writeValueAsString(metadata);
+            var bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (var os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        });
         // Removed web interface handler - now using React frontend
     }
     
@@ -94,6 +112,7 @@ public class RPGApiServer {
         System.out.println("  GET  /api/game/status?session_id=X - Get complete world state");
         System.out.println("  GET  /api/ai/prompt?session_id=X - View AI context prompt");
         System.out.println("  GET  /api/metrics - System performance metrics");
+        System.out.println("  GET  /api/game/metadata - Game system configuration and data");
         System.out.println();
         System.out.println("🌐 Frontend: Start React app with 'cd frontend && npm start'");
         System.out.println("📡 Backend API running on port " + server.getAddress().getPort());
@@ -143,7 +162,7 @@ public class RPGApiServer {
                 metrics.incrementSessions();
                 
                 // Generate contextual welcome with full adventure knowledge
-                var adventureContext = adventureLoader.generateAdventureContext(currentAdventure, "village");
+                var adventureContext = gameSystem.getAdventureContext(currentAdventure, "village");
                 var welcomePrompt = String.format(
                     "New player %s has just arrived in their home village. They are a brave fighter " +
                     "seeking the bandit Bargle who has been terrorizing the area. Full context: %s", 
@@ -383,7 +402,7 @@ public class RPGApiServer {
         
         // Add TSR Basic D&D Adventure context first
         context.append("=== TSR BASIC D&D ADVENTURE CONTEXT ===\n");
-        context.append(adventureLoader.generateAdventureContext(currentAdventure, 
+        context.append(gameSystem.getAdventureContext(currentAdventure, 
             playerState.currentLocationId() != null ? playerState.currentLocationId() : "village")).append("\n");
         
         // Add character context
@@ -420,7 +439,7 @@ public class RPGApiServer {
         }
         
         // Add D&D rules context
-        context.append(adventureLoader.generateRulesContext());
+        context.append(gameSystem.getRulesContext());
         
         return context.toString();
     }

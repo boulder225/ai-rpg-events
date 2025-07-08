@@ -61,4 +61,24 @@ public interface GameSystem {
      * @return Location ID where players begin
      */
     String getStartingLocation();
+    
+    /**
+     * Get a human-readable context summary for the current adventure/location.
+     * @param adventure The adventure data
+     * @param locationId The current location ID
+     * @return Context string for AI or frontend
+     */
+    String getAdventureContext(AdventureData adventure, String locationId);
+
+    /**
+     * Get a human-readable summary of the game system rules.
+     * @return Rules context string for AI or frontend
+     */
+    String getRulesContext();
+
+    /**
+     * Get metadata about the game system for the frontend (name, description, commands, etc).
+     * @return Map of metadata fields
+     */
+    Map<String, Object> getMetadata();
 }
