@@ -32,34 +32,25 @@ const api = {
   async getMetrics() {
     const response = await fetch('/api/metrics');
     return response.json();
+  },
+
+  async getMetadata() {
+    const response = await fetch('/api/game/metadata');
+    return response.json();
   }
 };
 
 // Adventure Map Component
-const AdventureMap = ({ currentLocation, sessionId, onLocationUpdate }) => {
-  const locationMap = {
-    'village': '🏘️ Your Home Village',
-    'cave_entrance': '🕳️ Cave Entrance',
-    'first_corridor': '🌑 Dark Corridor',
-    'snake_chamber': '🐍 Snake Chamber',
-    'aleena_chamber': '⛪ Aleena\'s Chamber',
-    'ghoul_corridor': '💀 Ghoul Corridor',
-    'locked_door_area': '🚪 Locked Door',
-    'bargle_chamber': '🧙‍♂️ Bargle\'s Lair',
-    'exit_passage': '🌅 Hidden Exit'
-  };
+const AdventureMap = ({ currentLocation, sessionId, onLocationUpdate, locations }) => {
+  // locations: { id: LocationData }
+  const locationMap = locations || {};
+  const locationIds = Object.keys(locationMap);
 
-  const locationConnections = {
-    'village': ['cave_entrance'],
-    'cave_entrance': ['village', 'first_corridor'],
-    'first_corridor': ['cave_entrance', 'snake_chamber'],
-    'snake_chamber': ['first_corridor', 'aleena_chamber'],
-    'aleena_chamber': ['snake_chamber', 'ghoul_corridor'],
-    'ghoul_corridor': ['aleena_chamber', 'locked_door_area'],
-    'locked_door_area': ['ghoul_corridor', 'bargle_chamber'],
-    'bargle_chamber': ['locked_door_area', 'exit_passage'],
-    'exit_passage': ['bargle_chamber', 'village']
-  };
+  // Build connections map from locations
+  const locationConnections = {};
+  locationIds.forEach(id => {
+    locationConnections[id] = locationMap[id]?.connections || [];
+  });
 
   const updateMap = async () => {
     if (!sessionId) return;
@@ -87,16 +78,16 @@ const AdventureMap = ({ currentLocation, sessionId, onLocationUpdate }) => {
     <div className="section">
       <h3>🗺️ Adventure Map</h3>
       <div className="current-location">
-        📍 Current Location: {locationMap[currentLocation] || locationMap['village']}
+        📍 Current Location: {locationMap[currentLocation]?.name || 'Unknown'}
       </div>
       <div className="map-container">
-        {Object.entries(locationMap).map(([locationId, name]) => (
+        {locationIds.map(locationId => (
           <div
             key={locationId}
             className={getLocationClass(locationId)}
             data-location={locationId}
           >
-            {name}
+            {locationMap[locationId]?.icon} {locationMap[locationId]?.name}
           </div>
         ))}
       </div>
@@ -106,8 +97,8 @@ const AdventureMap = ({ currentLocation, sessionId, onLocationUpdate }) => {
 };
 
 // Game Actions Component
-const GameActions = ({ sessionId, onActionExecuted }) => {
-  const [command, setCommand] = useState('/look around');
+const GameActions = ({ sessionId, onActionExecuted, quickCommands }) => {
+  const [command, setCommand] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -133,15 +124,6 @@ const GameActions = ({ sessionId, onActionExecuted }) => {
     }
   };
 
-  const quickCommands = [
-    { label: '👁️ Look', cmd: '/look around' },
-    { label: '💬 Talk', cmd: '/talk tavern_keeper' },
-    { label: '⚔️ Fight', cmd: '/attack goblin' },
-    { label: '🕳️ Go Cave', cmd: '/go cave' },
-    { label: '🏘️ Go Village', cmd: '/go village' },
-    { label: '🌑 Go Corridor', cmd: '/go corridor' }
-  ];
-
   return (
     <div className="section">
       <h3>⚔️ Game Actions</h3>
@@ -152,8 +134,8 @@ const GameActions = ({ sessionId, onActionExecuted }) => {
         placeholder="Command"
       />
       <br />
-      {quickCommands.map((cmd, index) => (
-        <button key={index} onClick={() => setCommand(cmd.cmd)}>
+      {quickCommands && quickCommands.map((cmd, index) => (
+        <button key={index} onClick={() => setCommand(cmd.command)}>
           {cmd.label}
         </button>
       ))}
@@ -167,8 +149,8 @@ const GameActions = ({ sessionId, onActionExecuted }) => {
 };
 
 // Session Management Component
-const SessionManager = ({ onSessionCreated }) => {
-  const [playerName, setPlayerName] = useState('Lyra the Mystic');
+const SessionManager = ({ onSessionCreated, defaultPlayerName }) => {
+  const [playerName, setPlayerName] = useState(defaultPlayerName || '');
   const [sessionInfo, setSessionInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -249,11 +231,24 @@ const AIStatus = () => {
 // Main App Component
 const App = () => {
   const [sessionId, setSessionId] = useState('');
-  const [currentLocation, setCurrentLocation] = useState('village');
+  const [currentLocation, setCurrentLocation] = useState('');
+  const [metadata, setMetadata] = useState(null);
+
+  useEffect(() => {
+    // Fetch game metadata on mount
+    api.getMetadata().then(setMetadata);
+  }, []);
+
+  useEffect(() => {
+    // Set starting location from metadata when session is created
+    if (metadata && !sessionId) {
+      setCurrentLocation(metadata.startingLocation || '');
+    }
+  }, [metadata, sessionId]);
 
   const handleSessionCreated = (newSessionId) => {
     setSessionId(newSessionId);
-    setCurrentLocation('village');
+    setCurrentLocation(metadata?.startingLocation || '');
   };
 
   const handleActionExecuted = () => {
@@ -272,27 +267,30 @@ const App = () => {
     }, 500);
   };
 
+  if (!metadata) {
+    return <div className="App"><div className="container"><div>Loading game system...</div></div></div>;
+  }
+
   return (
     <div className="App">
       <div className="container">
         <div className="header">
-          <h1>🎮 AI-RPG Event Sourcing Platform</h1>
-          <p>🤖 Claude AI Integration • 🌍 Persistent Worlds • ⚡ Real-time Event Sourcing</p>
+          <h1>{metadata.systemName || 'AI-RPG Event Sourcing Platform'}</h1>
+          <p>{metadata.description || 'AI Integration • Persistent Worlds • Event Sourcing'}</p>
           <AIStatus />
         </div>
-        
         <div className="grid">
-          <SessionManager onSessionCreated={handleSessionCreated} />
-          
+          <SessionManager onSessionCreated={handleSessionCreated} defaultPlayerName="Lyra the Mystic" />
           <GameActions 
             sessionId={sessionId}
             onActionExecuted={handleActionExecuted}
+            quickCommands={metadata.quickCommands}
           />
-          
           <AdventureMap 
             currentLocation={currentLocation}
             sessionId={sessionId}
             onLocationUpdate={setCurrentLocation}
+            locations={metadata.locations}
           />
         </div>
       </div>
