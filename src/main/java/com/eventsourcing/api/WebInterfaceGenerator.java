@@ -79,6 +79,42 @@ public class WebInterfaceGenerator {
                         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
                         gap: 20px; 
                     }
+                    .map-container {
+                        background: rgba(0,0,0,0.4);
+                        border-radius: 12px;
+                        padding: 15px;
+                        border: 2px solid #00d4aa;
+                        position: relative;
+                        min-height: 200px;
+                    }
+                    .map-location {
+                        display: inline-block;
+                        background: rgba(255,255,255,0.1);
+                        border: 1px solid #555;
+                        border-radius: 8px;
+                        padding: 8px 12px;
+                        margin: 4px;
+                        font-size: 0.9em;
+                        transition: all 0.3s ease;
+                    }
+                    .map-location.current {
+                        background: linear-gradient(45deg, #00d4aa, #00ff88);
+                        color: #000;
+                        font-weight: bold;
+                        border-color: #00ff88;
+                        transform: scale(1.1);
+                        box-shadow: 0 0 15px rgba(0, 212, 170, 0.5);
+                    }
+                    .map-location.connected {
+                        background: rgba(0, 212, 170, 0.2);
+                        border-color: #00d4aa;
+                    }
+                    .current-location {
+                        color: #00ff88;
+                        font-weight: bold;
+                        font-size: 1.1em;
+                        margin-bottom: 10px;
+                    }
                 </style>
             </head>
             <body>
@@ -110,8 +146,29 @@ public class WebInterfaceGenerator {
                             <button onclick="setCommand('/talk tavern_keeper')">💬 Talk</button>
                             <button onclick="setCommand('/attack goblin')">⚔️ Fight</button>
                             <br>
+                            <button onclick="setCommand('/go cave')">🕳️ Go Cave</button>
+                            <button onclick="setCommand('/go village')">🏘️ Go Village</button>
+                            <button onclick="setCommand('/go corridor')">🌑 Go Corridor</button>
+                            <br>
                             <button onclick="executeAction()">🎯 Execute Action</button>
                             <div id="actionResult" class="output hidden"></div>
+                        </div>
+                        
+                        <div class="section">
+                            <h3>🗺️ Adventure Map</h3>
+                            <div class="current-location" id="currentLocationText">📍 Current Location: Village</div>
+                            <div class="map-container" id="adventureMap">
+                                <div class="map-location current" data-location="village">🏘️ Village</div>
+                                <div class="map-location" data-location="cave_entrance">🕳️ Cave Entrance</div>
+                                <div class="map-location" data-location="first_corridor">🌑 Dark Corridor</div>
+                                <div class="map-location" data-location="snake_chamber">🐍 Snake Chamber</div>
+                                <div class="map-location" data-location="aleena_chamber">⛪ Aleenas Chamber</div>
+                                <div class="map-location" data-location="ghoul_corridor">💀 Ghoul Corridor</div>
+                                <div class="map-location" data-location="locked_door_area">🚪 Locked Door</div>
+                                <div class="map-location" data-location="bargle_chamber">🧙‍♂️ Bargle's Lair</div>
+                                <div class="map-location" data-location="exit_passage">🌅 Hidden Exit</div>
+                            </div>
+                            <button onclick="updateMap()">🔄 Update Map</button>
                         </div>
                         
                         <div class="section">
@@ -338,6 +395,90 @@ public class WebInterfaceGenerator {
                         }
                     }
 
+                    // Map functionality
+                    const locationMap = {
+                        'village': '🏘️ Your Home Village',
+                        'cave_entrance': '🕳️ Cave Entrance', 
+                        'first_corridor': '🌑 Dark Corridor',
+                        'snake_chamber': '🐍 Snake Chamber',
+                        'aleena_chamber': '⛪ Aleena\'s Chamber',
+                        'ghoul_corridor': '💀 Ghoul Corridor', 
+                        'locked_door_area': '🚪 Locked Door',
+                        'bargle_chamber': '🧙‍♂️ Bargle\'s Lair',
+                        'exit_passage': '🌅 Hidden Exit'
+                    };
+                    
+                    const locationConnections = {
+                        'village': ['cave_entrance'],
+                        'cave_entrance': ['village', 'first_corridor'],
+                        'first_corridor': ['cave_entrance', 'snake_chamber'],
+                        'snake_chamber': ['first_corridor', 'aleena_chamber'],
+                        'aleena_chamber': ['snake_chamber', 'ghoul_corridor'],
+                        'ghoul_corridor': ['aleena_chamber', 'locked_door_area'],
+                        'locked_door_area': ['ghoul_corridor', 'bargle_chamber'],
+                        'bargle_chamber': ['locked_door_area', 'exit_passage'],
+                        'exit_passage': ['bargle_chamber', 'village']
+                    };
+                    
+                    function updateMapDisplay(currentLocation) {
+                        const mapContainer = document.getElementById('adventureMap');
+                        const currentLocationText = document.getElementById('currentLocationText');
+                        
+                        // Update current location text
+                        const locationName = locationMap[currentLocation] || locationMap['village'];
+                        currentLocationText.textContent = `📍 Current Location: ${locationName}`;
+                        
+                        // Update map locations
+                        const locations = mapContainer.querySelectorAll('.map-location');
+                        locations.forEach(location => {
+                            const locationId = location.getAttribute('data-location');
+                            location.classList.remove('current', 'connected');
+                            
+                            if (locationId === currentLocation) {
+                                location.classList.add('current');
+                            } else if (locationConnections[currentLocation] && 
+                                      locationConnections[currentLocation].includes(locationId)) {
+                                location.classList.add('connected');
+                            }
+                        });
+                    }
+                    
+                    async function updateMap() {
+                        const sessionId = document.getElementById('sessionId').value || currentSessionId;
+                        if (!sessionId) {
+                            alert('🚨 Please enter session ID or create a session first');
+                            return;
+                        }
+                        
+                        try {
+                            const response = await fetch('/api/game/status?session_id=' + sessionId);
+                            const data = await response.json();
+                            
+                            if (data.success && data.context.current_location) {
+                                updateMapDisplay(data.context.current_location);
+                            } else {
+                                // Default to village if no location found
+                                updateMapDisplay('village');
+                            }
+                        } catch (error) {
+                            console.error('Map update error:', error);
+                            updateMapDisplay('village'); // Fallback to village
+                        }
+                    }
+                    
+                    // Auto-update map after actions
+                    const originalExecuteAction = executeAction;
+                    executeAction = async function() {
+                        await originalExecuteAction();
+                        setTimeout(updateMap, 500); // Update map after action
+                    };
+                    
+                    const originalCreateSession = createSession;
+                    createSession = async function() {
+                        await originalCreateSession();
+                        setTimeout(() => updateMapDisplay('village'), 500); // Start at village
+                    };
+                    
                     function show(elementId) {
                         document.getElementById(elementId).classList.remove('hidden');
                     }

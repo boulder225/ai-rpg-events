@@ -112,8 +112,8 @@ public class RPGCommandHandler {
     
     private RPGState.PlayerState buildPlayerState(String playerId, List<StoredEvent<RPGEvent>> events) {
         var name = "";
-        var currentLocationId = "";
-        var health = 100;
+        var currentLocationId = "village"; // Default starting location
+        var health = 100; // Default starting health (generic RPG)
         var skills = new HashMap<String, Integer>();
         var relationships = new HashMap<String, RPGState.Relationship>();
         var completedQuests = new ArrayList<String>();

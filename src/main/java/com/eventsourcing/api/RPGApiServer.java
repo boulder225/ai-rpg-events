@@ -463,6 +463,26 @@ public class RPGApiServer {
                     Map.of("action", "examine"), Instant.now()
                 ));
             
+            case "/go cave", "/enter cave", "/move cave" -> 
+                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
+                    UUID.randomUUID().toString(), playerId, "cave_entrance", Instant.now()
+                ));
+            
+            case "/go village", "/return village", "/move village" -> 
+                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
+                    UUID.randomUUID().toString(), playerId, "village", Instant.now()
+                ));
+            
+            case "/go corridor", "/enter corridor", "/move corridor" -> 
+                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
+                    UUID.randomUUID().toString(), playerId, "first_corridor", Instant.now()
+                ));
+            
+            case "/go chamber", "/enter chamber", "/move chamber" -> 
+                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
+                    UUID.randomUUID().toString(), playerId, "aleena_chamber", Instant.now()
+                ));
+            
             default -> 
                 RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
                     UUID.randomUUID().toString(), playerId, "unknown", "unknown",
@@ -497,8 +517,14 @@ public class RPGApiServer {
     }
     
     private Map<String, Object> buildContextSummary(RPGState.PlayerState playerState) {
+        // Default to village if no location is set
+        String currentLocation = playerState.currentLocationId();
+        if (currentLocation == null || currentLocation.isEmpty()) {
+            currentLocation = "village";
+        }
+        
         return Map.of(
-            "current_location", playerState.currentLocationId(),
+            "current_location", currentLocation,
             "player_health", playerState.health(),
             "total_actions", playerState.actionHistory().size(),
             "active_quests", playerState.activeQuests(),
