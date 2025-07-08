@@ -102,6 +102,32 @@ const GameActions = ({ sessionId, onActionExecuted, quickCommands }) => {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Filter and simplify quick commands
+  let lookCmd = null;
+  const goCmds = [];
+  const talkCmds = [];
+  if (quickCommands) {
+    for (const cmd of quickCommands) {
+      if (!lookCmd && cmd.command && cmd.command.startsWith('/look')) {
+        lookCmd = { ...cmd, label: 'Look' };
+      } else if (cmd.command && cmd.command.startsWith('/go ')) {
+        // Extract location name from description
+        let locName = cmd.description?.replace('Travel to ', '') || cmd.command.replace('/go ', '');
+        goCmds.push({ ...cmd, label: `Go to ${locName}` });
+      } else if (cmd.command && cmd.command.startsWith('/talk ')) {
+        // Extract NPC name from description
+        let npcName = cmd.description?.replace('Talk to ', '') || cmd.command.replace('/talk ', '');
+        talkCmds.push({ ...cmd, label: `Talk to ${npcName}` });
+      }
+      if (goCmds.length >= 2 && talkCmds.length >= 2 && lookCmd) break;
+    }
+  }
+  const simplifiedCommands = [
+    ...(lookCmd ? [lookCmd] : []),
+    ...goCmds.slice(0, 2),
+    ...talkCmds.slice(0, 2)
+  ];
+
   const executeAction = async () => {
     if (!sessionId || !command) {
       alert('🚨 Please enter session ID and command');
@@ -126,7 +152,7 @@ const GameActions = ({ sessionId, onActionExecuted, quickCommands }) => {
 
   return (
     <div className="section">
-      <h3>⚔️ Game Actions</h3>
+      <h3>Game Actions</h3>
       <input
         type="text"
         value={command}
@@ -134,14 +160,8 @@ const GameActions = ({ sessionId, onActionExecuted, quickCommands }) => {
         placeholder="Command"
       />
       <br />
-      {quickCommands && quickCommands.map((cmd, index) => (
-        <button key={index} onClick={() => setCommand(cmd.command)}>
-          {cmd.label}
-        </button>
-      ))}
-      <br />
       <button onClick={executeAction} disabled={loading}>
-        {loading ? '⏳ Processing...' : '🎯 Execute Action'}
+        {loading ? 'Processing...' : 'Execute Action'}
       </button>
       {result && <div className="output">{result}</div>}
     </div>
