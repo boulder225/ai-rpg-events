@@ -79,7 +79,7 @@ public class RPGApiServer {
         server.createContext("/api/game/status", new GameStatusHandler());
         server.createContext("/api/ai/prompt", new AIPromptHandler());
         server.createContext("/api/metrics", new MetricsHandler());
-        server.createContext("/", new WebInterfaceHandler());
+        // Removed web interface handler - now using React frontend
     }
     
     public void start() {
@@ -93,7 +93,9 @@ public class RPGApiServer {
         System.out.println("  GET  /api/game/status?session_id=X - Get complete world state");
         System.out.println("  GET  /api/ai/prompt?session_id=X - View AI context prompt");
         System.out.println("  GET  /api/metrics - System performance metrics");
-        System.out.println("  GET  / - Interactive web interface");
+        System.out.println();
+        System.out.println("🌐 Frontend: Start React app with 'cd frontend && npm start'");
+        System.out.println("📡 Backend API running on port " + server.getAddress().getPort());
         System.out.println();
         if (aiService.isConfigured()) {
             System.out.println("🎮 Ready for intelligent AI adventures with Claude!");
@@ -328,21 +330,6 @@ public class RPGApiServer {
         }
     }
     
-    private class WebInterfaceHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            var html = WebInterfaceGenerator.generateHTML();
-            var bytes = html.getBytes(StandardCharsets.UTF_8);
-            
-            exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
-            exchange.sendResponseHeaders(200, bytes.length);
-            
-            try (var os = exchange.getResponseBody()) {
-                os.write(bytes);
-            }
-        }
-    }
-    
     // Core game processing with Claude AI
     private GameResponse processGameActionWithAI(String playerId, String command) {
         var startTime = System.currentTimeMillis();
@@ -560,6 +547,8 @@ public class RPGApiServer {
         
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
         exchange.sendResponseHeaders(statusCode, bytes.length);
         
         try (var os = exchange.getResponseBody()) {

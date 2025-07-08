@@ -1,0 +1,155 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+  padding: 20px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.section {
+  margin: 20px 0;
+  padding: 25px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+button {
+  padding: 12px 24px;
+  margin: 8px;
+  cursor: pointer;
+  background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+input {
+  width: 300px;
+  padding: 12px;
+  margin: 8px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.9);
+  color: #333;
+}
+
+.output {
+  background: rgba(0,0,0,0.3);
+  padding: 20px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
+  border-left: 4px solid #00d4aa;
+  margin-top: 15px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.hidden {
+  display: none;
+}
+
+h1 {
+  font-size: 2.5em;
+  margin-bottom: 10px;
+}
+
+h3 {
+  color: #00d4aa;
+  margin-top: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.map-container {
+  background: rgba(0,0,0,0.4);
+  border-radius: 12px;
+  padding: 15px;
+  border: 2px solid #00d4aa;
+  position: relative;
+  min-height: 200px;
+}
+
+.map-location {
+  display: inline-block;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 4px;
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+}
+
+.map-location.current {
+  background: linear-gradient(45deg, #00d4aa, #00ff88);
+  color: #000;
+  font-weight: bold;
+  border-color: #00ff88;
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(0, 212, 170, 0.5);
+}
+
+.map-location.connected {
+  background: rgba(0, 212, 170, 0.2);
+  border-color: #00d4aa;
+}
+
+.current-location {
+  color: #00ff88;
+  font-weight: bold;
+  font-size: 1.1em;
+  margin-bottom: 10px;
+}
+
+.ai-status {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.2);
+}
+
+.ai-status.ai-active {
+  background: rgba(0,255,136,0.2);
+}
+
+.ai-status.ai-simulation {
+  background: rgba(255,170,0,0.2);
+}
+
+.ai-status.ai-error {
+  background: rgba(255,0,0,0.2);
+}
