@@ -3,12 +3,13 @@ package com.eventsourcing.api;
 import com.eventsourcing.rpg.*;
 import com.eventsourcing.core.infrastructure.InMemoryEventStore;
 import com.eventsourcing.ai.*;
-import com.eventsourcing.dnd.DnDAdventureLoader;
+import com.eventsourcing.gameSystem.core.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import com.eventsourcing.api.ApiModels.*;
+import com.eventsourcing.dnd.DnDAdventureLoader;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -153,7 +154,7 @@ public class RPGApiServer {
                     aiResponse.content() : 
                     String.format("🌟 Benvenuto, %s! La tua avventura inizia in un villaggio mistico dove la magia antica scorre attraverso strade di ciottoli.", request.playerName);
                 
-                var response = new GameResponse(
+                var response = new ApiModels.GameResponse(
                     true,
                     welcomeMessage,
                     sessionId,
@@ -228,7 +229,7 @@ public class RPGApiServer {
                 var playerState = commandHandler.getPlayerState(playerId);
                 var context = buildContextSummary(playerState);
                 
-                var response = new GameResponse(
+                var response = new ApiModels.GameResponse(
                     true,
                     "World state retrieved from persistent event streams",
                     sessionId,
@@ -268,7 +269,7 @@ public class RPGApiServer {
                 
                 var prompt = generateAIPrompt(playerId);
                 
-                var response = new GameResponse(
+                var response = new ApiModels.GameResponse(
                     true,
                     prompt,
                     null,
@@ -318,7 +319,7 @@ public class RPGApiServer {
                 )
             );
             
-            var response = new GameResponse(
+            var response = new ApiModels.GameResponse(
                 true,
                 "System metrics retrieved",
                 null,
@@ -331,7 +332,7 @@ public class RPGApiServer {
     }
     
     // Core game processing with Claude AI
-    private GameResponse processGameActionWithAI(String playerId, String command) {
+    private ApiModels.GameResponse processGameActionWithAI(String playerId, String command) {
         var startTime = System.currentTimeMillis();
         
         try {
@@ -358,7 +359,7 @@ public class RPGApiServer {
             
             metrics.recordResponseTime(System.currentTimeMillis() - startTime);
             
-            return new GameResponse(
+            return new ApiModels.GameResponse(
                 true, 
                 aiResponse.content(), 
                 null, 
@@ -367,7 +368,7 @@ public class RPGApiServer {
             );
             
         } catch (Exception e) {
-            return new GameResponse(
+            return new ApiModels.GameResponse(
                 false, 
                 null, 
                 null, 
@@ -557,7 +558,7 @@ public class RPGApiServer {
     }
     
     private void sendErrorResponse(HttpExchange exchange, String message, int statusCode) throws IOException {
-        var response = new GameResponse(false, null, null, null, message);
+        var response = new ApiModels.GameResponse(false, null, null, null, message);
         sendJsonResponse(exchange, response, statusCode);
     }
     

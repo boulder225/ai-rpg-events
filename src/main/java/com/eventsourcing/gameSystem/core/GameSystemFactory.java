@@ -14,9 +14,11 @@ public class GameSystemFactory {
     
     // Static registration of available game systems
     static {
-        // D&D system will be registered here when we create the plugin
-        // registerSystem("dnd", DnDGameSystem.class);
+        // Register D&D plugin
+        registerSystem("dnd", com.eventsourcing.gameSystem.plugins.dnd.DnDGameSystem.class);
+        // Future game systems will be registered here:
         // registerSystem("cthulhu", CthulhuGameSystem.class);
+        // registerSystem("cyberpunk", CyberpunkGameSystem.class);
     }
     
     /**

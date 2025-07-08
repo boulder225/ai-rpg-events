@@ -2,6 +2,8 @@ package com.eventsourcing.gameSystem.core;
 
 import java.util.List;
 import java.util.Map;
+import com.eventsourcing.gameSystem.core.NPCData;
+import com.eventsourcing.gameSystem.core.EncounterData;
 
 /**
  * Generic adventure data model that works across different game systems.
