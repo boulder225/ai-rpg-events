@@ -180,9 +180,12 @@ public class RPGApiServer {
                     request.playerName(), adventureContext, languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction));
                 var aiResponse = aiService.generateGameMasterResponse(welcomePrompt, "starting TSR Basic D&D adventure");
                 
-                var welcomeMessage = aiResponse.isSuccess() ? 
-                    aiResponse.content() : 
-                    String.format("🌟 Benvenuto, %s! La tua avventura inizia in un villaggio mistico dove la magia antica scorre attraverso strade di ciottoli.", request.playerName());
+                var welcomeMessage = switch (aiResponse) {
+                    case AIResponse.Success success -> success.content();
+                    case AIResponse.Fallback fallback -> fallback.content();
+                    case AIResponse.Error error -> 
+                        String.format("🌟 Benvenuto, %s! La tua avventura inizia in un villaggio mistico dove la magia antica scorre attraverso strade di ciottoli.", request.playerName());
+                };
                 
                 var response = new ApiModels.GameResponse(
                     true,
@@ -424,8 +427,16 @@ public class RPGApiServer {
             var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
             
             // Record AI token usage if available
-            if (aiResponse.isSuccess()) {
-                aiService.getMetrics().recordTokenUsage(aiResponse.getTotalTokens());
+            switch (aiResponse) {
+                case AIResponse.Success success -> {
+                    aiService.getMetrics().recordTokenUsage(success.getTotalTokens());
+                }
+                case AIResponse.Fallback fallback -> {
+                    // No token usage for fallback responses
+                }
+                case AIResponse.Error error -> {
+                    // No token usage for error responses
+                }
             }
             
             // Process command and record events
@@ -546,8 +557,23 @@ public class RPGApiServer {
         context.put("active_quests", playerState.activeQuests().size());
         context.put("relationships", playerState.relationships().size());
         context.put("ai_powered", aiResponse.isSuccess());
-        context.put("tokens_used", aiResponse.getTotalTokens());
         context.put("response_source", aiResponse.isSuccess() ? "claude-ai" : "fallback");
+        
+        // Add token usage only for successful responses
+        switch (aiResponse) {
+            case AIResponse.Success success -> {
+                context.put("tokens_used", success.getTotalTokens());
+            }
+            case AIResponse.Fallback fallback -> {
+                context.put("tokens_used", 0);
+                context.put("fallback_reason", fallback.reason());
+            }
+            case AIResponse.Error error -> {
+                context.put("tokens_used", 0);
+                context.put("error_message", error.errorMessage());
+            }
+        }
+        
         return context;
     }
     
