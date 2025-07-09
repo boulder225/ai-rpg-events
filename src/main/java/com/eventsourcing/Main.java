@@ -1,41 +1,37 @@
 package com.eventsourcing;
 
 import com.eventsourcing.api.RPGApiServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Main entry point for the AI-RPG Event Sourcing Platform.
  */
 public class Main {
     
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+    
     public static void main(String[] args) {
         try {
-            int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
+            // Heroku sets PORT environment variable
+            String portEnv = System.getenv("PORT");
+            int port = portEnv != null ? Integer.parseInt(portEnv) : 
+                      (args.length > 0 ? Integer.parseInt(args[0]) : 8080);
             
-            System.out.println("🎮 Starting AI-RPG Event Sourcing Platform...");
-            System.out.println("🌐 Server will be available at: http://localhost:" + port);
-            System.out.println();
+            log.info("🎮 Starting AI-RPG Event Sourcing Platform...");
+            log.info("🌐 Server will be available at: http://localhost:{}", port);
             
             var server = new RPGApiServer(port);
             server.start();
             
-            System.out.println();
-            System.out.println("✅ Server started successfully!");
-            System.out.println("📚 API Documentation:");
-            System.out.println("  POST /api/session/create - Create new adventure session");
-            System.out.println("  POST /api/game/action - Execute game actions with AI responses");
-            System.out.println("  GET  /api/game/status - Get complete world state");
-            System.out.println("  GET  /api/ai/prompt - View AI context prompt");
-            System.out.println("  GET  /api/metrics - System performance metrics");
-            System.out.println("  GET  / - Interactive web interface");
-            System.out.println();
-            System.out.println("🛑 Press Ctrl+C to stop the server");
+            log.info("✅ Server started successfully!");
+            log.info("🛑 Press Ctrl+C to stop the server");
             
             // Keep the server running
             Thread.currentThread().join();
             
         } catch (Exception e) {
-            System.err.println("❌ Failed to start server: " + e.getMessage());
-            e.printStackTrace();
+            log.error("❌ Failed to start server: {}", e.getMessage(), e);
             System.exit(1);
         }
     }

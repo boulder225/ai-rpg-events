@@ -22,6 +22,21 @@ tasks.withType<JavaExec> {
     jvmArgs("--enable-preview")
 }
 
+// Heroku-specific JAR configuration
+tasks.jar {
+    manifest {
+        attributes["Main-Class"] = "com.eventsourcing.api.RPGServerLauncher"
+    }
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName.set("ai-rpg-events.jar")
+}
+
+// Ensure build task creates the main JAR
+tasks.build {
+    dependsOn(tasks.jar)
+}
+
 tasks.register("stage") {
     dependsOn("installDist")
 }

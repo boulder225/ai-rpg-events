@@ -2,6 +2,9 @@ package com.eventsourcing.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.eventsourcing.logging.RPGLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -18,6 +21,7 @@ import java.util.Map;
  */
 public class ClaudeAIService {
     
+    private static final Logger log = LoggerFactory.getLogger(ClaudeAIService.class);
     private static final String CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
     
     private final AIConfig config;
@@ -33,8 +37,8 @@ public class ClaudeAIService {
             .connectTimeout(Duration.ofSeconds(30))
             .build();
         this.objectMapper = new ObjectMapper();
-        this.rateLimiter = new RateLimiter(config.getRequestsPerMinute());
-        this.cache = new AICache(config.getCacheTtlMinutes());
+        this.rateLimiter = new RateLimiter(config.requestsPerMinute());
+        this.cache = new AICache(config.cacheTtlMinutes());
         this.metrics = new AIMetrics();
     }
     
@@ -42,33 +46,61 @@ public class ClaudeAIService {
      * Generate an AI Game Master response based on game context and player action.
      */
     public AIResponse generateGameMasterResponse(String context, String playerAction) {
-        if (!config.isConfigured()) {
-            return createFallbackResponse(playerAction);
-        }
-        
-        var cacheKey = generateCacheKey(context, playerAction);
-        var cachedResponse = cache.get(cacheKey);
-        if (cachedResponse != null) {
-            metrics.recordCacheHit();
-            return cachedResponse;
-        }
-        
-        if (!rateLimiter.tryAcquire()) {
-            metrics.recordRateLimit();
-            return createFallbackResponse(playerAction, "Rate limit exceeded");
-        }
+        String requestId = java.util.UUID.randomUUID().toString().substring(0, 8);
+        RPGLogger.setAIContext(config.claudeModel(), requestId);
         
         try {
-            var prompt = buildGameMasterPrompt(context, playerAction);
-            var response = callClaudeAPI(prompt);
+            if (!config.isConfigured()) {
+                log.warn("AI service not configured, returning fallback response");
+                return createFallbackResponse(playerAction);
+            }
             
-            metrics.recordRequest(true);
-            cache.put(cacheKey, response);
-            return response;
+            var cacheKey = generateCacheKey(context, playerAction);
+            var cachedResponse = cache.get(cacheKey);
+            if (cachedResponse != null) {
+                log.debug("Cache hit for GM response: requestId={}", requestId);
+                metrics.recordCacheHit();
+                return cachedResponse;
+            }
             
-        } catch (Exception e) {
-            metrics.recordRequest(false);
-            return createFallbackResponse(playerAction, "AI service temporarily unavailable: " + e.getMessage());
+            if (!rateLimiter.tryAcquire()) {
+                log.warn("Rate limit exceeded for GM response: requestId={}", requestId);
+                metrics.recordRateLimit();
+                return createFallbackResponse(playerAction, "Rate limit exceeded");
+            }
+            
+            try {
+                var prompt = buildGameMasterPrompt(context, playerAction);
+                log.info("Calling Claude API for GM response: requestId={}, promptLength={}", requestId, prompt.length());
+                var response = callClaudeAPI(prompt);
+                
+                switch (response) {
+                    case AIResponse.Success success -> {
+                        log.info("GM response successful: requestId={}, tokens={}, contentLength={}", 
+                            requestId, success.getTotalTokens(), success.content().length());
+                        metrics.recordRequest(true);
+                        cache.put(cacheKey, response);
+                        return response;
+                    }
+                    case AIResponse.Error error -> {
+                        log.error("GM response failed: requestId={}, error={}", requestId, error.errorMessage());
+                        metrics.recordRequest(false);
+                        return createFallbackResponse(playerAction, error.errorMessage());
+                    }
+                    default -> {
+                        log.warn("Unexpected GM response type: requestId={}, type={}", requestId, response.getClass().getSimpleName());
+                        return response;
+                    }
+                }
+                
+            } catch (Exception e) {
+                log.error("GM API call failed: requestId={}", requestId, e);
+                metrics.recordRequest(false);
+                return createFallbackResponse(playerAction, "AI service temporarily unavailable: " + e.getMessage());
+            }
+            
+        } finally {
+            RPGLogger.clearAIContext();
         }
     }
     
@@ -76,33 +108,60 @@ public class ClaudeAIService {
      * Generate NPC dialogue based on character personality and context.
      */
     public AIResponse generateNPCDialogue(String npcName, String personality, String context, String playerInput) {
-        if (!config.isConfigured()) {
-            return createFallbackNPCResponse(npcName, playerInput);
-        }
-        
-        var cacheKey = generateCacheKey(npcName + personality, context + playerInput);
-        var cachedResponse = cache.get(cacheKey);
-        if (cachedResponse != null) {
-            metrics.recordCacheHit();
-            return cachedResponse;
-        }
-        
-        if (!rateLimiter.tryAcquire()) {
-            metrics.recordRateLimit();
-            return createFallbackNPCResponse(npcName, playerInput);
-        }
+        String requestId = java.util.UUID.randomUUID().toString().substring(0, 8);
+        RPGLogger.setAIContext(config.claudeModel(), requestId);
         
         try {
-            var prompt = buildNPCPrompt(npcName, personality, context, playerInput);
-            var response = callClaudeAPI(prompt);
+            if (!config.isConfigured()) {
+                log.warn("AI service not configured for NPC dialogue: npc={}", npcName);
+                return createFallbackNPCResponse(npcName, playerInput);
+            }
             
-            metrics.recordRequest(true);
-            cache.put(cacheKey, response);
-            return response;
+            var cacheKey = generateCacheKey(npcName + personality, context + playerInput);
+            var cachedResponse = cache.get(cacheKey);
+            if (cachedResponse != null) {
+                log.debug("Cache hit for NPC dialogue: requestId={}, npc={}", requestId, npcName);
+                metrics.recordCacheHit();
+                return cachedResponse;
+            }
             
-        } catch (Exception e) {
-            metrics.recordRequest(false);
-            return createFallbackNPCResponse(npcName, playerInput);
+            if (!rateLimiter.tryAcquire()) {
+                log.warn("Rate limit exceeded for NPC dialogue: requestId={}, npc={}", requestId, npcName);
+                metrics.recordRateLimit();
+                return createFallbackNPCResponse(npcName, playerInput);
+            }
+            
+            try {
+                var prompt = buildNPCPrompt(npcName, personality, context, playerInput);
+                log.info("Calling Claude API for NPC dialogue: requestId={}, npc={}", requestId, npcName);
+                var response = callClaudeAPI(prompt);
+                
+                switch (response) {
+                    case AIResponse.Success success -> {
+                        log.info("NPC dialogue successful: requestId={}, npc={}, tokens={}", 
+                            requestId, npcName, success.getTotalTokens());
+                        metrics.recordRequest(true);
+                        cache.put(cacheKey, response);
+                        return response;
+                    }
+                    case AIResponse.Error error -> {
+                        log.error("NPC dialogue failed: requestId={}, npc={}, error={}", requestId, npcName, error.errorMessage());
+                        metrics.recordRequest(false);
+                        return createFallbackNPCResponse(npcName, playerInput);
+                    }
+                    default -> {
+                        return response;
+                    }
+                }
+                
+            } catch (Exception e) {
+                log.error("NPC API call failed: requestId={}, npc={}", requestId, npcName, e);
+                metrics.recordRequest(false);
+                return createFallbackNPCResponse(npcName, playerInput);
+            }
+            
+        } finally {
+            RPGLogger.clearAIContext();
         }
     }
     
@@ -110,28 +169,53 @@ public class ClaudeAIService {
      * Generate world event descriptions for autonomous events.
      */
     public AIResponse generateWorldEvent(String eventType, String context) {
-        if (!config.isConfigured()) {
-            return createFallbackWorldEvent(eventType);
-        }
+        String requestId = java.util.UUID.randomUUID().toString().substring(0, 8);
+        RPGLogger.setAIContext(config.claudeModel(), requestId);
         
         try {
-            var prompt = buildWorldEventPrompt(eventType, context);
-            var response = callClaudeAPI(prompt);
+            if (!config.isConfigured()) {
+                log.warn("AI service not configured for world event: eventType={}", eventType);
+                return createFallbackWorldEvent(eventType);
+            }
             
-            metrics.recordRequest(true);
-            return response;
+            try {
+                var prompt = buildWorldEventPrompt(eventType, context);
+                log.info("Calling Claude API for world event: requestId={}, eventType={}", requestId, eventType);
+                var response = callClaudeAPI(prompt);
+                
+                switch (response) {
+                    case AIResponse.Success success -> {
+                        log.info("World event successful: requestId={}, eventType={}, tokens={}", 
+                            requestId, eventType, success.getTotalTokens());
+                        metrics.recordRequest(true);
+                        return response;
+                    }
+                    case AIResponse.Error error -> {
+                        log.error("World event failed: requestId={}, eventType={}, error={}", requestId, eventType, error.errorMessage());
+                        metrics.recordRequest(false);
+                        return createFallbackWorldEvent(eventType);
+                    }
+                    default -> {
+                        return response;
+                    }
+                }
+                
+            } catch (Exception e) {
+                log.error("World event API call failed: requestId={}, eventType={}", requestId, eventType, e);
+                metrics.recordRequest(false);
+                return createFallbackWorldEvent(eventType);
+            }
             
-        } catch (Exception e) {
-            metrics.recordRequest(false);
-            return createFallbackWorldEvent(eventType);
+        } finally {
+            RPGLogger.clearAIContext();
         }
     }
     
     private AIResponse callClaudeAPI(String prompt) throws IOException, InterruptedException {
         var requestBody = objectMapper.writeValueAsString(Map.of(
-            "model", config.getClaudeModel(),
-            "max_tokens", config.getMaxTokens(),
-            "temperature", config.getTemperature(),
+            "model", config.claudeModel(),
+            "max_tokens", config.maxTokens(),
+            "temperature", config.temperature(),
             "messages", java.util.List.of(
                 Map.of(
                     "role", "user",
@@ -143,7 +227,7 @@ public class ClaudeAIService {
         var request = HttpRequest.newBuilder()
             .uri(URI.create(CLAUDE_API_URL))
             .header("Content-Type", "application/json")
-            .header("x-api-key", config.getClaudeApiKey())
+            .header("x-api-key", config.claudeApiKey())
             .header("anthropic-version", "2023-06-01")
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build();
@@ -158,13 +242,10 @@ public class ClaudeAIService {
         var content = jsonResponse.path("content").get(0).path("text").asText();
         var usage = jsonResponse.path("usage");
         
-        return new AIResponse(
+        return AIResponse.success(
             content,
-            true,
-            null,
             usage.path("input_tokens").asInt(),
-            usage.path("output_tokens").asInt(),
-            Instant.now()
+            usage.path("output_tokens").asInt()
         );
     }
     
@@ -253,40 +334,19 @@ public class ClaudeAIService {
                 "✨ Il mondo risponde alla tua azione con magia antica, anche se i dettagli rimangono misteriosi.";
         };
         
-        return new AIResponse(
-            fallbackText,
-            false,
-            reason,
-            0,
-            0,
-            Instant.now()
-        );
+        return AIResponse.fallback(fallbackText, reason);
     }
     
     private AIResponse createFallbackNPCResponse(String npcName, String playerInput) {
         var fallbackText = String.format("💬 %s considera le tue parole pensierosamente, anche se la sua risposta sembra distante oggi.", npcName);
         
-        return new AIResponse(
-            fallbackText,
-            false,
-            "AI service not available",
-            0,
-            0,
-            Instant.now()
-        );
+        return AIResponse.fallback(fallbackText, "AI service not available");
     }
     
     private AIResponse createFallbackWorldEvent(String eventType) {
         var fallbackText = String.format("🌍 Un %s si verifica nel mondo, i suoi effetti si propagano attraverso il regno.", eventType);
         
-        return new AIResponse(
-            fallbackText,
-            false,
-            "AI service not available",
-            0,
-            0,
-            Instant.now()
-        );
+        return AIResponse.fallback(fallbackText, "AI service not available");
     }
     
     private String generateCacheKey(String... parts) {

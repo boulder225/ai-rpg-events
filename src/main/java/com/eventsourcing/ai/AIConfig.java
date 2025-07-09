@@ -1,58 +1,83 @@
 package com.eventsourcing.ai;
 
-import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Configuration for AI services.
  * Loads settings from environment variables.
  */
-public class AIConfig {
+public record AIConfig(
+    String claudeApiKey,
+    String claudeModel,
+    int maxTokens,
+    double temperature,
+    int requestsPerMinute,
+    int cacheTtlMinutes
+) {
     
-    private final String claudeApiKey;
-    private final String claudeModel;
-    private final int maxTokens;
-    private final double temperature;
-    private final int requestsPerMinute;
-    private final int cacheTtlMinutes;
+    private static final Logger log = LoggerFactory.getLogger(AIConfig.class);
     
-    public AIConfig() {
-        this.claudeApiKey = getEnvOrDefault("CLAUDE_API_KEY", "");
-        this.claudeModel = getEnvOrDefault("CLAUDE_MODEL", "claude-sonnet-4-20250514");
-        this.maxTokens = Integer.parseInt(getEnvOrDefault("CLAUDE_MAX_TOKENS", "1000"));
-        this.temperature = Double.parseDouble(getEnvOrDefault("CLAUDE_TEMPERATURE", "0.7"));
-        this.requestsPerMinute = Integer.parseInt(getEnvOrDefault("AI_REQUESTS_PER_MINUTE", "60"));
-        this.cacheTtlMinutes = Integer.parseInt(getEnvOrDefault("AI_CACHE_TTL_MINUTES", "30"));
+    // Compact constructor for validation
+    public AIConfig {
+        if (temperature < 0 || temperature > 1) {
+            throw new IllegalArgumentException("Invalid temperature: " + temperature);
+        }
+        if (maxTokens <= 0) {
+            throw new IllegalArgumentException("Invalid maxTokens: " + maxTokens);
+        }
+        if (requestsPerMinute <= 0) {
+            throw new IllegalArgumentException("Invalid requestsPerMinute: " + requestsPerMinute);
+        }
+        if (cacheTtlMinutes <= 0) {
+            throw new IllegalArgumentException("Invalid cacheTtlMinutes: " + cacheTtlMinutes);
+        }
+    }
+    
+    /**
+     * Factory method to create configuration from environment variables.
+     */
+    public static AIConfig fromEnvironment() {
+        var config = new AIConfig(
+            getEnvOrDefault("CLAUDE_API_KEY", ""),
+            getEnvOrDefault("CLAUDE_MODEL", "claude-sonnet-4-20250514"),
+            Integer.parseInt(getEnvOrDefault("CLAUDE_MAX_TOKENS", "1000")),
+            Double.parseDouble(getEnvOrDefault("CLAUDE_TEMPERATURE", "0.7")),
+            Integer.parseInt(getEnvOrDefault("AI_REQUESTS_PER_MINUTE", "60")),
+            Integer.parseInt(getEnvOrDefault("AI_CACHE_TTL_MINUTES", "30"))
+        );
         
-        // Debug output
-        System.out.println("🔧 AIConfig Debug:");
-        System.out.println("  - CLAUDE_API_KEY from env: " + (System.getenv("CLAUDE_API_KEY") != null ? "SET" : "NOT SET"));
-        System.out.println("  - CLAUDE_API_KEY from props: " + (System.getProperty("CLAUDE_API_KEY") != null ? "SET" : "NOT SET"));
-        System.out.println("  - Final API key length: " + (claudeApiKey != null ? claudeApiKey.length() : 0));
-        System.out.println("  - Is configured: " + isConfigured());
+        // Structured logging for AI configuration
+        log.info("🔧 AIConfig initialized: model={}, configured={}, maxTokens={}, temperature={}", 
+            config.claudeModel(), 
+            config.isConfigured(),
+            config.maxTokens(),
+            config.temperature());
+            
+        log.debug("Environment configuration: apiKeyFromEnv={}, apiKeyFromProps={}, finalKeyLength={}", 
+            System.getenv("CLAUDE_API_KEY") != null ? "SET" : "NOT_SET",
+            System.getProperty("CLAUDE_API_KEY") != null ? "SET" : "NOT_SET",
+            config.claudeApiKey() != null ? config.claudeApiKey().length() : 0);
+        
+        return config;
     }
     
-    // For testing with custom values
-    public AIConfig(String claudeApiKey, String claudeModel, int maxTokens, double temperature) {
-        this.claudeApiKey = claudeApiKey;
-        this.claudeModel = claudeModel;
-        this.maxTokens = maxTokens;
-        this.temperature = temperature;
-        this.requestsPerMinute = 60;
-        this.cacheTtlMinutes = 30;
+    /**
+     * Factory method for testing with custom values.
+     */
+    public static AIConfig forTesting(String claudeApiKey, String claudeModel, int maxTokens, double temperature) {
+        return new AIConfig(claudeApiKey, claudeModel, maxTokens, temperature, 60, 30);
     }
     
-    public String getClaudeApiKey() { return claudeApiKey; }
-    public String getClaudeModel() { return claudeModel; }
-    public int getMaxTokens() { return maxTokens; }
-    public double getTemperature() { return temperature; }
-    public int getRequestsPerMinute() { return requestsPerMinute; }
-    public int getCacheTtlMinutes() { return cacheTtlMinutes; }
-    
+    /**
+     * Check if the configuration is valid for use.
+     */
     public boolean isConfigured() {
-        return claudeApiKey != null && !claudeApiKey.isEmpty() && !claudeApiKey.equals("your_claude_api_key_here");
+        return claudeApiKey != null && !claudeApiKey.isEmpty() 
+            && !claudeApiKey.equals("your_claude_api_key_here");
     }
     
-    private String getEnvOrDefault(String key, String defaultValue) {
+    private static String getEnvOrDefault(String key, String defaultValue) {
         // First try environment variable
         String value = System.getenv(key);
         if (value != null && !value.isEmpty()) {
@@ -66,11 +91,5 @@ public class AIConfig {
         }
         
         return defaultValue;
-    }
-    
-    @Override
-    public String toString() {
-        return String.format("AIConfig{model='%s', maxTokens=%d, temperature=%.1f, configured=%s}", 
-            claudeModel, maxTokens, temperature, isConfigured());
     }
 }

@@ -4,11 +4,14 @@ import com.eventsourcing.rpg.*;
 import com.eventsourcing.core.infrastructure.InMemoryEventStore;
 import com.eventsourcing.ai.*;
 import com.eventsourcing.gameSystem.core.*;
+import com.eventsourcing.logging.RPGLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import com.eventsourcing.api.ApiModels.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Complete RESTful API server for the AI-RPG platform with Claude AI integration.
  */
 public class RPGApiServer {
+    
+    private static final Logger log = LoggerFactory.getLogger(RPGApiServer.class);
     
     private final HttpServer server;
     private final RPGCommandHandler commandHandler;
@@ -58,11 +63,13 @@ public class RPGApiServer {
         // Language config (env or system property, default 'en')
         this.aiLanguage = System.getenv().getOrDefault("AI_LANGUAGE", System.getProperty("ai.language", "en"));
         
-        System.out.println("🎮 Game System: " + gameSystem.getSystemName());
-        System.out.println("📜 Loaded Adventure: " + currentAdventure.title());
-        System.out.println("🏰 Adventure Locations: " + currentAdventure.locations().size());
-        System.out.println("👥 Adventure NPCs: " + currentAdventure.npcs().size());
-        System.out.println("⚔️ Adventure Encounters: " + currentAdventure.encounters().size());
+        log.info("🎮 Initializing AI-RPG Platform on port {}", port);
+        log.info("Game System loaded: name={}, adventure={}, locations={}, npcs={}, encounters={}", 
+            gameSystem.getSystemName(),
+            currentAdventure.title(),
+            currentAdventure.locations().size(),
+            currentAdventure.npcs().size(),
+            currentAdventure.encounters().size());
         
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         setupRoutes();
@@ -70,14 +77,13 @@ public class RPGApiServer {
         
         // Log AI configuration status
         if (aiService.isConfigured()) {
-            System.out.println("🤖 Claude AI integration: ENABLED");
-            System.out.println("💫 AI Model: " + aiConfig.claudeModel());
+            log.info("🤖 Claude AI integration ENABLED: model={}", aiConfig.claudeModel());
             if (aiConfig.claudeModel().contains("claude-4") || aiConfig.claudeModel().contains("sonnet-4") || aiConfig.claudeModel().contains("opus-4")) {
-                System.out.println("🎆 CLAUDE 4 DETECTED - Latest AI power activated!");
+                log.info("🎆 CLAUDE 4 DETECTED - Latest AI power activated!");
             }
         } else {
-            System.out.println("⚠️ Claude AI integration: DISABLED (using fallback responses)");
-            System.out.println("📝 Set CLAUDE_API_KEY in .env file to enable Claude 4 AI responses");
+            log.warn("⚠️ Claude AI integration DISABLED - using fallback responses");
+            log.info("📝 Set CLAUDE_API_KEY in .env file to enable Claude AI responses");
         }
     }
     
@@ -107,30 +113,24 @@ public class RPGApiServer {
     
     public void start() {
         server.start();
-        System.out.println("🚀 AI-RPG Event Sourcing Server started!");
-        System.out.println("🌐 URL: http://localhost:" + server.getAddress().getPort());
-        System.out.println();
-        System.out.println("📚 API Endpoints:");
-        System.out.println("  POST /api/session/create - Create new adventure session");
-        System.out.println("  POST /api/game/action - Execute game actions with AI responses");
-        System.out.println("  GET  /api/game/status?session_id=X - Get complete world state");
-        System.out.println("  GET  /api/ai/prompt?session_id=X - View AI context prompt");
-        System.out.println("  GET  /api/metrics - System performance metrics");
-        System.out.println("  GET  /api/game/metadata - Game system configuration and data");
-        System.out.println();
-        System.out.println("🌐 Frontend: Start React app with 'cd frontend && npm start'");
-        System.out.println("📡 Backend API running on port " + server.getAddress().getPort());
-        System.out.println();
-        if (aiService.isConfigured()) {
-            System.out.println("🎮 Ready for intelligent AI adventures with Claude!");
-        } else {
-            System.out.println("🎮 Ready for adventures with simulated AI responses!");
+        log.info("🚀 AI-RPG Server started successfully on port {}", server.getAddress().getPort());
+        log.info("🌐 API endpoints available at http://localhost:{}", server.getAddress().getPort());
+        log.info("📚 Ready for {} adventures!", aiService.isConfigured() ? "intelligent AI" : "simulated AI");
+        
+        if (log.isInfoEnabled()) {
+            log.info("📚 API Documentation:");
+            log.info("  POST /api/session/create - Create new adventure session");
+            log.info("  POST /api/game/action - Execute game actions with AI responses");
+            log.info("  GET  /api/game/status - Get complete world state");
+            log.info("  GET  /api/ai/prompt - View AI context prompt");
+            log.info("  GET  /api/metrics - System performance metrics");
+            log.info("  GET  /api/game/metadata - Game system configuration");
         }
     }
     
     public void stop() {
         server.stop(0);
-        System.out.println("🛑 Server stopped");
+        log.info("🛑 AI-RPG Server stopped");
     }
     
     // Session Creation Handler

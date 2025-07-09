@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    
+    <!-- Console Appender for Development -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- Main Application Log -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/ai-rpg.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/ai-rpg.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- AI Metrics Appender (JSON for analysis) -->
+    <appender name="AI_METRICS" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/ai-metrics.json</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/ai-metrics.%d{yyyy-MM-dd}.json.gz</fileNamePattern>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <loggerName/>
+                <message/>
+                <mdc/>
+                <arguments/>
+            </providers>
+        </encoder>
+    </appender>
+    
+    <!-- Game Events Appender -->
+    <appender name="GAME_EVENTS" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/game-events.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/game-events.%d{yyyy-MM-dd}.gz</fileNamePattern>
+            <maxHistory>60</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%X{playerId:-system}] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- Async Wrapper for Performance -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+    
+    <!-- Logger Configurations -->
+    
+    <!-- AI Service Logging -->
+    <logger name="com.eventsourcing.ai" level="INFO" additivity="false">
+        <appender-ref ref="AI_METRICS"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    
+    <!-- RPG Game Logic -->
+    <logger name="com.eventsourcing.rpg" level="DEBUG" additivity="false">
+        <appender-ref ref="GAME_EVENTS"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    
+    <!-- API Server -->
+    <logger name="com.eventsourcing.api" level="INFO"/>
+    
+    <!-- Event Sourcing Core -->
+    <logger name="com.eventsourcing.core" level="DEBUG"/>
+    
+    <!-- Game Systems -->
+    <logger name="com.eventsourcing.gameSystem" level="INFO"/>
+    
+    <!-- Root Logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </root>
+    
+</configuration>

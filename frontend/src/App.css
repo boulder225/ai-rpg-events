@@ -153,3 +153,91 @@ h3 {
 .ai-status.ai-error {
   background: rgba(255,0,0,0.2);
 }
+
+.grid-single {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chatbox-large {
+  min-height: 500px;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 40px 32px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.chatbox-history {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.12);
+  border-radius: 8px;
+  padding: 18px 16px;
+  margin-bottom: 18px;
+  min-height: 220px;
+  max-height: 320px;
+}
+
+.chatbox-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.chatbox-input {
+  flex: 1 1 auto;
+  min-height: 40px;
+  max-height: 80px;
+  border-radius: 8px;
+  border: none;
+  padding: 12px;
+  font-size: 1.1em;
+  resize: none;
+  background: rgba(255,255,255,0.95);
+  color: #222;
+}
+
+.chatbox-send {
+  padding: 12px 28px;
+  border-radius: 8px;
+  background: linear-gradient(45deg, #00d4aa, #00ff88);
+  color: #222;
+  font-weight: bold;
+  border: none;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.chatbox-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-msg {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 1.05em;
+  word-break: break-word;
+}
+
+.chat-msg.user {
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  align-self: flex-end;
+  text-align: right;
+}
+
+.chat-msg.system {
+  background: rgba(255,255,255,0.7);
+  color: #222;
+  align-self: flex-start;
+  text-align: left;
+}
