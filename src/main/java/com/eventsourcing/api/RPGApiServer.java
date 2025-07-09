@@ -151,6 +151,14 @@ public class RPGApiServer {
     private class CreateSessionHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendMethodNotAllowed(exchange);
                 return;
@@ -218,6 +226,14 @@ public class RPGApiServer {
     private class GameActionHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendMethodNotAllowed(exchange);
                 return;
@@ -252,6 +268,14 @@ public class RPGApiServer {
     private class GameStatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendMethodNotAllowed(exchange);
                 return;
@@ -293,6 +317,14 @@ public class RPGApiServer {
     private class AIPromptHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendMethodNotAllowed(exchange);
                 return;
@@ -333,6 +365,14 @@ public class RPGApiServer {
     private class MetricsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendMethodNotAllowed(exchange);
                 return;
@@ -591,27 +631,30 @@ public class RPGApiServer {
     }
     
     private void sendJsonResponse(HttpExchange exchange, Object response, int statusCode) throws IOException {
-        var json = objectMapper.writeValueAsString(response);
-        var bytes = json.getBytes(StandardCharsets.UTF_8);
-        
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        var responseBody = objectMapper.writeValueAsBytes(response);
+        exchange.sendResponseHeaders(statusCode, responseBody.length);
         try (var os = exchange.getResponseBody()) {
-            os.write(bytes);
+            os.write(responseBody);
         }
     }
     
     private void sendErrorResponse(HttpExchange exchange, String message, int statusCode) throws IOException {
-        var response = new ApiModels.GameResponse(false, null, null, null, message);
-        sendJsonResponse(exchange, response, statusCode);
+        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        var response = Map.of("success", false, "error", message);
+        var responseBody = objectMapper.writeValueAsBytes(response);
+        exchange.sendResponseHeaders(statusCode, responseBody.length);
+        try (var os = exchange.getResponseBody()) {
+            os.write(responseBody);
+        }
     }
     
     private void sendMethodNotAllowed(HttpExchange exchange) throws IOException {
-        exchange.sendResponseHeaders(405, 0);
+        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().add("Allow", "POST, OPTIONS");
+        exchange.sendResponseHeaders(405, -1);
         exchange.close();
     }
 }
