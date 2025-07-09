@@ -43,7 +43,7 @@ public class RPGApiServer {
         this.commandHandler = new RPGCommandHandler(eventStore);
         
         // Initialize Claude AI service
-        var aiConfig = new AIConfig();
+        var aiConfig = AIConfig.fromEnvironment();
         this.aiService = new ClaudeAIService(aiConfig);
         
         this.objectMapper = new ObjectMapper();
@@ -72,8 +72,8 @@ public class RPGApiServer {
         // Log AI configuration status
         if (aiService.isConfigured()) {
             System.out.println("🤖 Claude AI integration: ENABLED");
-            System.out.println("💫 AI Model: " + aiConfig.getClaudeModel());
-            if (aiConfig.getClaudeModel().contains("claude-4") || aiConfig.getClaudeModel().contains("sonnet-4") || aiConfig.getClaudeModel().contains("opus-4")) {
+            System.out.println("💫 AI Model: " + aiConfig.claudeModel());
+            if (aiConfig.claudeModel().contains("claude-4") || aiConfig.claudeModel().contains("sonnet-4") || aiConfig.claudeModel().contains("opus-4")) {
                 System.out.println("🎆 CLAUDE 4 DETECTED - Latest AI power activated!");
             }
         } else {
@@ -147,20 +147,20 @@ public class RPGApiServer {
             try {
                 var request = parseRequest(exchange, SessionCreateRequest.class);
                 
-                if (request.playerId == null || request.playerName == null) {
+                if (request.playerId() == null || request.playerName() == null) {
                     sendErrorResponse(exchange, "PlayerID and PlayerName are required", 400);
                     return;
                 }
                 
                 var sessionId = UUID.randomUUID().toString();
-                activeSessions.put(sessionId, request.playerId);
+                activeSessions.put(sessionId, request.playerId());
                 
                 // Create player in event store
-                commandHandler.executePlayerCommand(request.playerId, playerState -> 
+                commandHandler.executePlayerCommand(request.playerId(), playerState -> 
                     RPGBusinessLogic.createPlayer(new RPGCommand.CreatePlayer(
                         UUID.randomUUID().toString(),
-                        request.playerId,
-                        request.playerName,
+                        request.playerId(),
+                        request.playerName(),
                         Instant.now()
                     ))
                 );
@@ -177,12 +177,12 @@ public class RPGApiServer {
                 var welcomePrompt = String.format(
                     "New player %s has just arrived in their home village. They are a brave fighter " +
                     "seeking the bandit Bargle who has been terrorizing the area. Full context: %s%s", 
-                    request.playerName, adventureContext, languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction));
+                    request.playerName(), adventureContext, languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction));
                 var aiResponse = aiService.generateGameMasterResponse(welcomePrompt, "starting TSR Basic D&D adventure");
                 
                 var welcomeMessage = aiResponse.isSuccess() ? 
                     aiResponse.content() : 
-                    String.format("🌟 Benvenuto, %s! La tua avventura inizia in un villaggio mistico dove la magia antica scorre attraverso strade di ciottoli.", request.playerName);
+                    String.format("🌟 Benvenuto, %s! La tua avventura inizia in un villaggio mistico dove la magia antica scorre attraverso strade di ciottoli.", request.playerName());
                 
                 var response = new ApiModels.GameResponse(
                     true,
@@ -212,18 +212,18 @@ public class RPGApiServer {
             try {
                 var request = parseRequest(exchange, GameActionRequest.class);
                 
-                if (request.sessionId == null || request.command == null) {
+                if (request.sessionId() == null || request.command() == null) {
                     sendErrorResponse(exchange, "SessionID and Command are required", 400);
                     return;
                 }
                 
-                var playerId = activeSessions.get(request.sessionId);
+                var playerId = activeSessions.get(request.sessionId());
                 if (playerId == null) {
                     sendErrorResponse(exchange, "Session not found", 404);
                     return;
                 }
                 
-                var result = processGameActionWithAI(playerId, request.command);
+                var result = processGameActionWithAI(playerId, request.command());
                 metrics.incrementActions();
                 
                 sendJsonResponse(exchange, result, 200);
