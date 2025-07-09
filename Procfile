@@ -1,1 +1,1 @@
-web: java -Dserver.port=$PORT -jar build/libs/ai-rpg-events.jar
+web: build/install/ai-rpg-events/bin/ai-rpg-events
