@@ -101,12 +101,26 @@ public class RPGApiServer {
             }
             var metadata = gameSystem.getMetadata();
             var json = objectMapper.writeValueAsString(metadata);
-            var bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, bytes.length);
             try (var os = exchange.getResponseBody()) {
                 os.write(bytes);
             }
+        });
+        // Global OPTIONS handler for CORS
+        server.createContext("/", exchange -> {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
+            // Optionally, handle root or fallback
+            exchange.sendResponseHeaders(404, 0);
+            exchange.close();
         });
         // Removed web interface handler - now using React frontend
     }
