@@ -55,7 +55,8 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.eventsourcing.api.RPGServerLauncher")
+    mainClass.set("com.eventsourcing.Main")
+    applicationDefaultJvmArgs = listOf("-DPORT=${'$'}PORT")
 }
 
 repositories {
