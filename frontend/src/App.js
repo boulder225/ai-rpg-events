@@ -97,73 +97,62 @@ const AdventureMap = ({ currentLocation, sessionId, onLocationUpdate, locations 
 };
 
 // Game Actions Component
-const GameActions = ({ sessionId, onActionExecuted, quickCommands }) => {
-  const [command, setCommand] = useState('');
-  const [result, setResult] = useState('');
+const GameActions = ({ sessionId, onActionExecuted }) => {
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [chat, setChat] = useState([
+    { sender: 'system', text: 'What do you want to do?' }
+  ]);
 
-  // Filter and simplify quick commands
-  let lookCmd = null;
-  const goCmds = [];
-  const talkCmds = [];
-  if (quickCommands) {
-    for (const cmd of quickCommands) {
-      if (!lookCmd && cmd.command && cmd.command.startsWith('/look')) {
-        lookCmd = { ...cmd, label: 'Look' };
-      } else if (cmd.command && cmd.command.startsWith('/go ')) {
-        // Extract location name from description
-        let locName = cmd.description?.replace('Travel to ', '') || cmd.command.replace('/go ', '');
-        goCmds.push({ ...cmd, label: `Go to ${locName}` });
-      } else if (cmd.command && cmd.command.startsWith('/talk ')) {
-        // Extract NPC name from description
-        let npcName = cmd.description?.replace('Talk to ', '') || cmd.command.replace('/talk ', '');
-        talkCmds.push({ ...cmd, label: `Talk to ${npcName}` });
-      }
-      if (goCmds.length >= 2 && talkCmds.length >= 2 && lookCmd) break;
-    }
-  }
-  const simplifiedCommands = [
-    ...(lookCmd ? [lookCmd] : []),
-    ...goCmds.slice(0, 2),
-    ...talkCmds.slice(0, 2)
-  ];
-
-  const executeAction = async () => {
-    if (!sessionId || !command) {
-      alert('🚨 Please enter session ID and command');
-      return;
-    }
-
+  const sendAction = async () => {
+    if (!sessionId || !input.trim()) return;
+    const userMsg = input.trim();
+    setChat(prev => [...prev, { sender: 'user', text: userMsg }]);
+    setInput('');
     setLoading(true);
     try {
-      const data = await api.executeAction(sessionId, command);
-      if (data.success) {
-        setResult(`🎭 AI RESPONSE:\n${data.message}\n\n📊 CONTEXT:\n${JSON.stringify(data.context, null, 2)}`);
+      const response = await api.executeAction(sessionId, userMsg);
+      if (response.success) {
+        setChat(prev => [...prev, { sender: 'system', text: response.message }]);
         onActionExecuted();
       } else {
-        setResult(`❌ ERROR: ${data.error}`);
+        setChat(prev => [...prev, { sender: 'system', text: `❌ ERROR: ${response.error}` }]);
       }
     } catch (error) {
-      alert('🌐 Network error: ' + error.message);
+      setChat(prev => [...prev, { sender: 'system', text: `🌐 Network error: ${error.message}` }]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendAction();
+    }
+  };
+
   return (
-    <div className="section">
+    <div className="section chatbox-large">
       <h3>Game Actions</h3>
-      <input
-        type="text"
-        value={command}
-        onChange={(e) => setCommand(e.target.value)}
-        placeholder="Command"
-      />
-      <br />
-      <button onClick={executeAction} disabled={loading}>
-        {loading ? 'Processing...' : 'Execute Action'}
-      </button>
-      {result && <div className="output">{result}</div>}
+      <div className="chatbox-history">
+        {chat.map((msg, idx) => (
+          <div key={idx} className={`chat-msg ${msg.sender}`}>{msg.sender === 'user' ? 'You: ' : 'System: '}{msg.text}</div>
+        ))}
+      </div>
+      <div className="chatbox-input-row">
+        <textarea
+          className="chatbox-input"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type your action and press Enter..."
+          rows={2}
+        />
+        <button onClick={sendAction} disabled={loading || !input.trim()} className="chatbox-send">
+          {loading ? 'Processing...' : 'Send'}
+        </button>
+      </div>
     </div>
   );
 };
@@ -248,71 +237,115 @@ const AIStatus = () => {
   );
 };
 
+// ChatRPG Component
+const ChatRPG = () => {
+  const [sessionId, setSessionId] = useState('');
+  const [chat, setChat] = useState([
+    { sender: 'system', text: 'Welcome to AI-RPG! What is your hero name?' }
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [awaitingHeroName, setAwaitingHeroName] = useState(true);
+
+  // Helper to fetch and show adventure context
+  const fetchAndShowAdventureContext = async (sid) => {
+    try {
+      const resp = await fetch(`/api/game/status?session_id=${sid}`);
+      const data = await resp.json();
+      if (data.success && data.context && data.context.adventure_context) {
+        setChat(prev => [...prev, { sender: 'system', text: data.context.adventure_context }]);
+      }
+    } catch (e) {
+      // Ignore context fetch errors
+    }
+  };
+
+  const sendPrompt = async () => {
+    const prompt = input.trim();
+    if (!prompt) return;
+    setChat(prev => [...prev, { sender: 'user', text: prompt }]);
+    setInput('');
+    setLoading(true);
+    if (awaitingHeroName) {
+      // Create session
+      try {
+        const data = await api.createSession(prompt);
+        if (data.success) {
+          setSessionId(data.session_id);
+          setChat(prev => [...prev, { sender: 'system', text: `Welcome, ${prompt}! Your adventure begins. What do you want to do?` }]);
+          setAwaitingHeroName(false);
+          // Show initial adventure context
+          fetchAndShowAdventureContext(data.session_id);
+        } else {
+          setChat(prev => [...prev, { sender: 'system', text: `❌ Error: ${data.error || 'Unknown error'}` }]);
+        }
+      } catch (error) {
+        setChat(prev => [...prev, { sender: 'system', text: `🌐 Network error: ${error.message}` }]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    // Game action
+    if (!sessionId) {
+      setChat(prev => [...prev, { sender: 'system', text: 'Please enter your hero name to begin.' }]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const response = await api.executeAction(sessionId, prompt);
+      if (response.success) {
+        setChat(prev => [...prev, { sender: 'system', text: response.message }]);
+        // Show updated adventure context
+        fetchAndShowAdventureContext(sessionId);
+      } else {
+        setChat(prev => [...prev, { sender: 'system', text: `❌ ERROR: ${response.error}` }]);
+      }
+    } catch (error) {
+      setChat(prev => [...prev, { sender: 'system', text: `🌐 Network error: ${error.message}` }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendPrompt();
+    }
+  };
+
+  return (
+    <div className="section chatbox-large">
+      <div className="chatbox-history">
+        {chat.map((msg, idx) => (
+          <div key={idx} className={`chat-msg ${msg.sender}`}>{msg.sender === 'user' ? 'You: ' : 'System: '}{msg.text}</div>
+        ))}
+      </div>
+      <div className="chatbox-input-row">
+        <textarea
+          className="chatbox-input"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={awaitingHeroName ? 'Enter your hero name...' : 'Type your action and press Enter...'}
+          rows={2}
+          disabled={loading}
+        />
+        <button onClick={sendPrompt} disabled={loading || !input.trim()} className="chatbox-send">
+          {loading ? 'Processing...' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Main App Component
 const App = () => {
-  const [sessionId, setSessionId] = useState('');
-  const [currentLocation, setCurrentLocation] = useState('');
-  const [metadata, setMetadata] = useState(null);
-
-  useEffect(() => {
-    // Fetch game metadata on mount
-    api.getMetadata().then(setMetadata);
-  }, []);
-
-  useEffect(() => {
-    // Set starting location from metadata when session is created
-    if (metadata && !sessionId) {
-      setCurrentLocation(metadata.startingLocation || '');
-    }
-  }, [metadata, sessionId]);
-
-  const handleSessionCreated = (newSessionId) => {
-    setSessionId(newSessionId);
-    setCurrentLocation(metadata?.startingLocation || '');
-  };
-
-  const handleActionExecuted = () => {
-    // Auto-update map after actions
-    setTimeout(async () => {
-      if (sessionId) {
-        try {
-          const data = await api.getStatus(sessionId);
-          if (data.success && data.context.current_location) {
-            setCurrentLocation(data.context.current_location);
-          }
-        } catch (error) {
-          console.error('Auto-update error:', error);
-        }
-      }
-    }, 500);
-  };
-
-  if (!metadata) {
-    return <div className="App"><div className="container"><div>Loading game system...</div></div></div>;
-  }
-
   return (
     <div className="App">
       <div className="container">
-        <div className="header">
-          <h1>{metadata.systemName || 'AI-RPG Event Sourcing Platform'}</h1>
-          <p>{metadata.description || 'AI Integration • Persistent Worlds • Event Sourcing'}</p>
-          <AIStatus />
-        </div>
-        <div className="grid">
-          <SessionManager onSessionCreated={handleSessionCreated} defaultPlayerName="Lyra the Mystic" />
-          <GameActions 
-            sessionId={sessionId}
-            onActionExecuted={handleActionExecuted}
-            quickCommands={metadata.quickCommands}
-          />
-          <AdventureMap 
-            currentLocation={currentLocation}
-            sessionId={sessionId}
-            onLocationUpdate={setCurrentLocation}
-            locations={metadata.locations}
-          />
-        </div>
+        <ChatRPG />
       </div>
     </div>
   );

@@ -33,7 +33,6 @@ public class RPGApiServer {
     private final GameSystem gameSystem;
     private final AdventureData currentAdventure;
     private final String aiLanguage;
-    private final Map<String, String> sessionLanguages = new ConcurrentHashMap<>();
     
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
@@ -88,7 +87,6 @@ public class RPGApiServer {
         server.createContext("/api/game/status", new GameStatusHandler());
         server.createContext("/api/ai/prompt", new AIPromptHandler());
         server.createContext("/api/metrics", new MetricsHandler());
-        server.createContext("/api/config/language", new LanguageConfigHandler());
         server.createContext("/api/game/metadata", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, 0);
@@ -169,9 +167,8 @@ public class RPGApiServer {
                 
                 // Generate contextual welcome with full adventure knowledge
                 var adventureContext = gameSystem.getAdventureContext(currentAdventure, "village");
-                String lang = getLanguageForSession(sessionId);
                 String languageInstruction = "";
-                if ("it".equalsIgnoreCase(lang)) {
+                if ("it".equalsIgnoreCase(aiLanguage)) {
                     languageInstruction = "Rispondi sempre in italiano.";
                 }
                 var welcomePrompt = String.format(
@@ -364,43 +361,6 @@ public class RPGApiServer {
         }
     }
     
-    // Language config handler
-    private class LanguageConfigHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if (!"POST".equals(exchange.getRequestMethod())) {
-                sendMethodNotAllowed(exchange);
-                return;
-            }
-            try {
-                var request = objectMapper.readTree(exchange.getRequestBody());
-                String lang = request.has("language") ? request.get("language").asText() : null;
-                String sessionId = request.has("session_id") ? request.get("session_id").asText() : null;
-                if (lang == null) {
-                    sendErrorResponse(exchange, "Missing language", 400);
-                    return;
-                }
-                if (sessionId != null && !sessionId.isEmpty()) {
-                    sessionLanguages.put(sessionId, lang);
-                } else {
-                    // Optionally, set global aiLanguage (not thread-safe, but for demo)
-                    // this.aiLanguage = lang;
-                }
-                sendJsonResponse(exchange, Map.of("success", true, "language", lang), 200);
-            } catch (Exception e) {
-                sendErrorResponse(exchange, "Failed to set language: " + e.getMessage(), 500);
-            }
-        }
-    }
-    
-    // Helper to get language for a session
-    private String getLanguageForSession(String sessionId) {
-        if (sessionId != null && sessionLanguages.containsKey(sessionId)) {
-            return sessionLanguages.get(sessionId);
-        }
-        return aiLanguage;
-    }
-    
     // Core game processing with Claude AI
     private ApiModels.GameResponse processGameActionWithAI(String playerId, String command) {
         var startTime = System.currentTimeMillis();
@@ -419,9 +379,8 @@ public class RPGApiServer {
                     break;
                 }
             }
-            String lang = getLanguageForSession(sessionId);
             String languageInstruction = "";
-            if ("it".equalsIgnoreCase(lang)) {
+            if ("it".equalsIgnoreCase(aiLanguage)) {
                 languageInstruction = "Rispondi sempre in italiano.";
             }
             var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
