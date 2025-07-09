@@ -29,15 +29,16 @@ public class RPGBusinessLogic {
      * Process player movement command.
      */
     public static CommandResult<RPGEvent> movePlayer(RPGState.PlayerState currentState, RPGCommand.MovePlayer command) {
-        if (currentState.currentLocationId().equals(command.toLocationId())) {
+        String currentLoc = currentState.currentLocationId() == null ? "" : currentState.currentLocationId().trim().toLowerCase();
+        String targetLoc = command.toLocationId() == null ? "" : command.toLocationId().trim().toLowerCase();
+        if (currentLoc.equals(targetLoc)) {
             return new CommandResult.Failure<>("Player already at location: " + command.toLocationId());
         }
-        
         var event = new RPGEvent.PlayerMovedToLocation(
             UUID.randomUUID().toString(),
             command.playerId(),
-            currentState.currentLocationId(),
-            command.toLocationId(),
+            currentLoc,
+            targetLoc,
             command.issuedAt()
         );
         return new CommandResult.Success<>(List.of(event));

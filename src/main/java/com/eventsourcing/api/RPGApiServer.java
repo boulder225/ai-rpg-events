@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Complete RESTful API server for the AI-RPG platform with Claude AI integration.
@@ -31,6 +32,8 @@ public class RPGApiServer {
     private final RPGMetrics metrics;
     private final GameSystem gameSystem;
     private final AdventureData currentAdventure;
+    private final String aiLanguage;
+    private final Map<String, String> sessionLanguages = new ConcurrentHashMap<>();
     
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
@@ -53,6 +56,8 @@ public class RPGApiServer {
         defaultConfig.setProperty("game.adventure", "tsr_basic");
         this.gameSystem = GameSystemFactory.createFromConfig(defaultConfig);
         this.currentAdventure = gameSystem.loadAdventure(defaultConfig.getProperty("game.adventure", "tsr_basic"));
+        // Language config (env or system property, default 'en')
+        this.aiLanguage = System.getenv().getOrDefault("AI_LANGUAGE", System.getProperty("ai.language", "en"));
         
         System.out.println("🎮 Game System: " + gameSystem.getSystemName());
         System.out.println("📜 Loaded Adventure: " + currentAdventure.title());
@@ -83,6 +88,7 @@ public class RPGApiServer {
         server.createContext("/api/game/status", new GameStatusHandler());
         server.createContext("/api/ai/prompt", new AIPromptHandler());
         server.createContext("/api/metrics", new MetricsHandler());
+        server.createContext("/api/config/language", new LanguageConfigHandler());
         server.createContext("/api/game/metadata", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, 0);
@@ -163,10 +169,15 @@ public class RPGApiServer {
                 
                 // Generate contextual welcome with full adventure knowledge
                 var adventureContext = gameSystem.getAdventureContext(currentAdventure, "village");
+                String lang = getLanguageForSession(sessionId);
+                String languageInstruction = "";
+                if ("it".equalsIgnoreCase(lang)) {
+                    languageInstruction = "Rispondi sempre in italiano.";
+                }
                 var welcomePrompt = String.format(
                     "New player %s has just arrived in their home village. They are a brave fighter " +
-                    "seeking the bandit Bargle who has been terrorizing the area. Full context: %s", 
-                    request.playerName, adventureContext);
+                    "seeking the bandit Bargle who has been terrorizing the area. Full context: %s%s", 
+                    request.playerName, adventureContext, languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction));
                 var aiResponse = aiService.generateGameMasterResponse(welcomePrompt, "starting TSR Basic D&D adventure");
                 
                 var welcomeMessage = aiResponse.isSuccess() ? 
@@ -350,6 +361,43 @@ public class RPGApiServer {
         }
     }
     
+    // Language config handler
+    private class LanguageConfigHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                sendMethodNotAllowed(exchange);
+                return;
+            }
+            try {
+                var request = objectMapper.readTree(exchange.getRequestBody());
+                String lang = request.has("language") ? request.get("language").asText() : null;
+                String sessionId = request.has("session_id") ? request.get("session_id").asText() : null;
+                if (lang == null) {
+                    sendErrorResponse(exchange, "Missing language", 400);
+                    return;
+                }
+                if (sessionId != null && !sessionId.isEmpty()) {
+                    sessionLanguages.put(sessionId, lang);
+                } else {
+                    // Optionally, set global aiLanguage (not thread-safe, but for demo)
+                    // this.aiLanguage = lang;
+                }
+                sendJsonResponse(exchange, Map.of("success", true, "language", lang), 200);
+            } catch (Exception e) {
+                sendErrorResponse(exchange, "Failed to set language: " + e.getMessage(), 500);
+            }
+        }
+    }
+    
+    // Helper to get language for a session
+    private String getLanguageForSession(String sessionId) {
+        if (sessionId != null && sessionLanguages.containsKey(sessionId)) {
+            return sessionLanguages.get(sessionId);
+        }
+        return aiLanguage;
+    }
+    
     // Core game processing with Claude AI
     private ApiModels.GameResponse processGameActionWithAI(String playerId, String command) {
         var startTime = System.currentTimeMillis();
@@ -360,8 +408,20 @@ public class RPGApiServer {
             // Generate full context for AI
             var gameContext = generateGameContextForAI(playerState);
             
-            // Get AI response
-            var aiResponse = aiService.generateGameMasterResponse(gameContext, command);
+            // Get sessionId from activeSessions (reverse lookup)
+            String sessionId = null;
+            for (var entry : activeSessions.entrySet()) {
+                if (entry.getValue().equals(playerId)) {
+                    sessionId = entry.getKey();
+                    break;
+                }
+            }
+            String lang = getLanguageForSession(sessionId);
+            String languageInstruction = "";
+            if ("it".equalsIgnoreCase(lang)) {
+                languageInstruction = "Rispondi sempre in italiano.";
+            }
+            var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
             
             // Record AI token usage if available
             if (aiResponse.isSuccess()) {
@@ -446,56 +506,24 @@ public class RPGApiServer {
     
     private com.eventsourcing.core.domain.CommandResult<RPGEvent> processCommandBasedOnType(
             String playerId, String command, RPGState.PlayerState state) {
-        return switch (command.toLowerCase()) {
-            case "/look around", "/look" -> 
-                RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
-                    UUID.randomUUID().toString(), playerId, "explore", "environment", 
-                    Map.of("action", "look"), Instant.now()
+        // Generic handler: if command is '/go <locationId>', treat as move
+        String trimmed = command.trim().toLowerCase();
+        if (trimmed.startsWith("/go ")) {
+            String toLocationId = trimmed.substring(4).trim().toLowerCase();
+            if (!toLocationId.isEmpty()) {
+                return RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
+                    UUID.randomUUID().toString(),
+                    playerId,
+                    toLocationId,
+                    Instant.now()
                 ));
-            
-            case "/attack goblin" -> 
-                RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
-                    UUID.randomUUID().toString(), playerId, "combat", "goblin",
-                    Map.of("action", "attack"), Instant.now()
-                ));
-            
-            case "/talk tavern_keeper" -> 
-                RPGBusinessLogic.initiateConversation(state, new RPGCommand.InitiateConversation(
-                    UUID.randomUUID().toString(), playerId, "tavern_keeper", "greeting", Instant.now()
-                ));
-            
-            case "/examine chest" -> 
-                RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
-                    UUID.randomUUID().toString(), playerId, "examine", "chest",
-                    Map.of("action", "examine"), Instant.now()
-                ));
-            
-            case "/go cave", "/enter cave", "/move cave" -> 
-                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
-                    UUID.randomUUID().toString(), playerId, "cave_entrance", Instant.now()
-                ));
-            
-            case "/go village", "/return village", "/move village" -> 
-                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
-                    UUID.randomUUID().toString(), playerId, "village", Instant.now()
-                ));
-            
-            case "/go corridor", "/enter corridor", "/move corridor" -> 
-                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
-                    UUID.randomUUID().toString(), playerId, "first_corridor", Instant.now()
-                ));
-            
-            case "/go chamber", "/enter chamber", "/move chamber" -> 
-                RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
-                    UUID.randomUUID().toString(), playerId, "aleena_chamber", Instant.now()
-                ));
-            
-            default -> 
-                RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
-                    UUID.randomUUID().toString(), playerId, "unknown", "unknown",
-                    Map.of("command", command), Instant.now()
-                ));
-        };
+            }
+        }
+        // Otherwise, treat as generic action
+        return RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
+            UUID.randomUUID().toString(), playerId, "unknown", "unknown",
+            Map.of("command", command), Instant.now()
+        ));
     }
     
     private String generateAIPrompt(String playerId) {
@@ -529,14 +557,16 @@ public class RPGApiServer {
         if (currentLocation == null || currentLocation.isEmpty()) {
             currentLocation = "village";
         }
-        
+        // Add adventure context (location description, features, etc.)
+        String adventureContext = gameSystem.getAdventureContext(currentAdventure, currentLocation);
         return Map.of(
             "current_location", currentLocation,
             "player_health", playerState.health(),
             "total_actions", playerState.actionHistory().size(),
             "active_quests", playerState.activeQuests(),
             "npcs_met", playerState.relationships().keySet(),
-            "ai_service_configured", aiService.isConfigured()
+            "ai_service_configured", aiService.isConfigured(),
+            "adventure_context", adventureContext
         );
     }
     

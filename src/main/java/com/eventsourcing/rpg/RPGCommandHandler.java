@@ -130,7 +130,7 @@ public class RPGCommandHandler {
                     name = created.name();
                 }
                 case RPGEvent.PlayerMovedToLocation moved -> {
-                    currentLocationId = moved.toLocationId();
+                    currentLocationId = moved.toLocationId() == null ? "" : moved.toLocationId().trim().toLowerCase();
                 }
                 case RPGEvent.PlayerHealthChanged healthChanged -> {
                     health = healthChanged.newHealth();
