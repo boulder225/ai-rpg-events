@@ -56,11 +56,10 @@ public class RPGCommandHandler {
     
     // --- Simple Operations ---
     public void createPlayer(String playerId, String name) {
-        RPGState.PlayerState state = new RPGState.PlayerState(
-            playerId, name, "village", 100, Map.of(), Map.of(), List.of(), List.of(), List.of(), java.time.Instant.now()
-        );
+        // Use business logic to create player with starting equipment
+        RPGState.PlayerState state = RPGBusinessLogic.createPlayer(playerId, name);
         putPlayerState(playerId, state);
-        log.info("[KISS] Created player: {}", playerId);
+        log.info("[KISS] Created player: {} with starting equipment", playerId);
     }
     
     public void movePlayer(String playerId, String toLocationId) {
@@ -72,10 +71,8 @@ public class RPGCommandHandler {
         
         String fromLocation = state.currentLocationId();
         
-        RPGState.PlayerState newState = new RPGState.PlayerState(
-            state.playerId(), state.name(), toLocationId, state.health(), state.skills(), state.relationships(),
-            state.completedQuests(), state.activeQuests(), state.actionHistory(), java.time.Instant.now()
-        );
+        // Use business logic to move player
+        RPGState.PlayerState newState = RPGBusinessLogic.movePlayer(state, toLocationId);
         putPlayerState(playerId, newState);
         
         // ENHANCEMENT: Trigger location context update (simple notification)

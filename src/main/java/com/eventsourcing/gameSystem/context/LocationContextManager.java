@@ -28,10 +28,15 @@ public class LocationContextManager {
     private final RPGCommandHandler commandHandler;
     private final ObjectMapper objectMapper;
     
-    // Cache for frequently accessed location contexts
+    // Enhanced cache with simple metrics
     private final Map<String, LocationContext> contextCache = new ConcurrentHashMap<>();
     private final Map<String, Instant> cacheTimestamps = new ConcurrentHashMap<>();
     private static final long CACHE_DURATION_MS = 30_000; // 30 seconds
+    
+    // Simple cache metrics
+    private long cacheHits = 0;
+    private long cacheMisses = 0;
+    private long cacheCleanups = 0;
     
     public LocationContextManager(AdventureData adventureData, RPGCommandHandler commandHandler) {
         this.adventureData = adventureData;
@@ -46,12 +51,15 @@ public class LocationContextManager {
         // Normalize location ID (handle case sensitivity and whitespace)
         String normalizedLocationId = normalizeLocationId(locationId);
         
-        // Check cache first
+        // Check cache first with automatic cleanup
         String cacheKey = normalizedLocationId + ":" + playerId;
-        LocationContext cached = getCachedContext(cacheKey);
+        LocationContext cached = getCachedContextWithCleanup(cacheKey);
         if (cached != null) {
+            cacheHits++;
             return cached;
         }
+        
+        cacheMisses++;
         
         try {
             // Get static location data from adventure
@@ -61,7 +69,7 @@ public class LocationContextManager {
                 return createFallbackContext(normalizedLocationId);
             }
             
-            // Get dynamic state from event store
+            // Get dynamic state from game handler
             RPGState.LocationState locationState = getLocationState(normalizedLocationId);
             RPGState.PlayerState playerState = commandHandler.getPlayerState(playerId);
             
@@ -297,11 +305,17 @@ public class LocationContextManager {
             .build();
     }
     
-    private LocationContext getCachedContext(String cacheKey) {
+    private LocationContext getCachedContextWithCleanup(String cacheKey) {
         Instant cacheTime = cacheTimestamps.get(cacheKey);
-        if (cacheTime != null && 
-            Instant.now().minusMillis(CACHE_DURATION_MS).isBefore(cacheTime)) {
-            return contextCache.get(cacheKey);
+        if (cacheTime != null) {
+            if (Instant.now().minusMillis(CACHE_DURATION_MS).isBefore(cacheTime)) {
+                return contextCache.get(cacheKey);
+            } else {
+                // Automatic cleanup of expired entry
+                contextCache.remove(cacheKey);
+                cacheTimestamps.remove(cacheKey);
+                cacheCleanups++;
+            }
         }
         return null;
     }
@@ -309,6 +323,53 @@ public class LocationContextManager {
     private void cacheContext(String cacheKey, LocationContext context) {
         contextCache.put(cacheKey, context);
         cacheTimestamps.put(cacheKey, Instant.now());
+    }
+    
+    /**
+     * Get simple cache statistics
+     */
+    public Map<String, Object> getCacheStats() {
+        long totalRequests = cacheHits + cacheMisses;
+        double hitRatio = totalRequests > 0 ? (double) cacheHits / totalRequests : 0.0;
+        
+        return Map.of(
+            "cache_size", contextCache.size(),
+            "cache_hits", cacheHits,
+            "cache_misses", cacheMisses,
+            "hit_ratio", Math.round(hitRatio * 100.0) / 100.0, // Round to 2 decimals
+            "cleanups_performed", cacheCleanups,
+            "cache_duration_seconds", CACHE_DURATION_MS / 1000
+        );
+    }
+    
+    /**
+     * Get current cache size for monitoring
+     */
+    public int getCacheSize() {
+        return contextCache.size();
+    }
+    
+    /**
+     * Periodic cleanup of expired entries (call from scheduled task if needed)
+     */
+    public void cleanupExpiredEntries() {
+        Instant now = Instant.now();
+        int removedCount = 0;
+        
+        var iterator = cacheTimestamps.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            if (now.minusMillis(CACHE_DURATION_MS).isAfter(entry.getValue())) {
+                contextCache.remove(entry.getKey());
+                iterator.remove();
+                removedCount++;
+            }
+        }
+        
+        if (removedCount > 0) {
+            cacheCleanups += removedCount;
+            LOGGER.info("Cleaned up {} expired cache entries", removedCount);
+        }
     }
     
     private void invalidatePlayerCache(String playerId) {

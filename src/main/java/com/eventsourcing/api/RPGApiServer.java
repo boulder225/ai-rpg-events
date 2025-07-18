@@ -594,14 +594,32 @@ public class RPGApiServer {
         context.append(gameSystem.getAdventureContext(currentAdventure, 
             playerState.currentLocationId() != null ? playerState.currentLocationId() : "village")).append("\n");
         
-        // Add character context
+        // Add enhanced character context with equipment
         context.append("=== CHARACTER STATUS ===\n");
         context.append("- Player Location: ").append(playerState.currentLocationId() != null ? playerState.currentLocationId() : "village").append("\n");
-        context.append("- Player Health: ").append(playerState.health()).append("/8 hp\n");
-        context.append("- Character Class: Fighter\n");
-        context.append("- Equipment: Chain Mail (AC 4), Sword, Dagger, Lantern\n");
-        context.append("- Ability Scores: STR 17 (+2), DEX 11, INT 9, WIS 8, CON 16, CHA 14\n");
-        context.append("- Active Quests: Find Bargle the bandit\n");
+        context.append("- Player Health: ").append(playerState.health()).append("/100 hp\n");
+        context.append("- Character Class: Fighter (D&D Basic)\n");
+        context.append("- Armor Class: ").append(playerState.getArmorClass()).append("\n");
+        
+        // Equipment information
+        context.append("- EQUIPPED ITEMS:\n");
+        if (!playerState.equipment().isEmpty()) {
+            playerState.equipment().forEach((slot, item) -> 
+                context.append("  * ").append(slot.toUpperCase()).append(": ").append(item).append("\n"));
+        } else {
+            context.append("  * No equipment\n");
+        }
+        
+        // Inventory
+        context.append("- INVENTORY: ");
+        if (!playerState.inventory().isEmpty()) {
+            context.append(String.join(", ", playerState.inventory())).append("\n");
+        } else {
+            context.append("Empty\n");
+        }
+        
+        context.append("- Current Weapon Damage: ").append(playerState.getWeaponDamage()).append("\n");
+        context.append("- Active Quests: ").append(playerState.activeQuests().isEmpty() ? "None" : String.join(", ", playerState.activeQuests())).append("\n");
         context.append("- Known NPCs: ").append(playerState.relationships().size()).append("\n");
         context.append("- Total Actions Taken: ").append(playerState.actionHistory().size()).append("\n\n");
         

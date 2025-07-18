@@ -52,7 +52,7 @@ public class ClaudeAIService {
         try {
             if (!config.isConfigured()) {
                 log.warn("AI service not configured, returning fallback response");
-                return createFallbackResponse(playerAction);
+                return createContextualFallback(playerAction);
             }
             
             var cacheKey = generateCacheKey(context, playerAction);
@@ -66,7 +66,7 @@ public class ClaudeAIService {
             if (!rateLimiter.tryAcquire()) {
                 log.warn("Rate limit exceeded for GM response: requestId={}", requestId);
                 metrics.recordRateLimit();
-                return createFallbackResponse(playerAction, "Rate limit exceeded");
+                return createContextualFallback(playerAction, "Rate limit exceeded");
             }
             
             try {
@@ -76,6 +76,12 @@ public class ClaudeAIService {
                 
                 switch (response) {
                     case AIResponse.Success success -> {
+                        // Simple response validation
+                        if (success.content().length() < 10) {
+                            log.warn("AI response too short, using fallback: requestId={}", requestId);
+                            return createContextualFallback(playerAction, "Response too short");
+                        }
+                        
                         log.info("GM response successful: requestId={}, tokens={}, contentLength={}", 
                             requestId, success.getTotalTokens(), success.content().length());
                         metrics.recordRequest(true);
@@ -85,7 +91,7 @@ public class ClaudeAIService {
                     case AIResponse.Error error -> {
                         log.error("GM response failed: requestId={}, error={}", requestId, error.errorMessage());
                         metrics.recordRequest(false);
-                        return createFallbackResponse(playerAction, error.errorMessage());
+                        return createContextualFallback(playerAction, error.errorMessage());
                     }
                     default -> {
                         log.warn("Unexpected GM response type: requestId={}, type={}", requestId, response.getClass().getSimpleName());
@@ -96,7 +102,7 @@ public class ClaudeAIService {
             } catch (Exception e) {
                 log.error("GM API call failed: requestId={}", requestId, e);
                 metrics.recordRequest(false);
-                return createFallbackResponse(playerAction, "AI service temporarily unavailable: " + e.getMessage());
+                return createContextualFallback(playerAction, "AI service temporarily unavailable: " + e.getMessage());
             }
             
         } finally {
@@ -250,27 +256,78 @@ public class ClaudeAIService {
     }
     
     private String buildGameMasterPrompt(String context, String playerAction) {
-        return String.format("""
-            Sei un esperto Game Master AI per un RPG fantasy immersivo. Il tuo ruolo è creare risposte 
-            coinvolgenti e contestuali che danno vita al mondo.
-            
-            CONTESTO DI GIOCO:
-            %s
-            
-            AZIONE DEL GIOCATORE: %s
-            
-            ISTRUZIONI:
-            - Fornisci una risposta vivida e immersiva che riconosca l'azione del giocatore
-            - Mantieni le risposte concise ma evocative (2-4 frasi)
-            - Includi dettagli sensoriali (viste, suoni, atmosfera)
-            - Considera la storia del giocatore e le relazioni nella tua risposta
-            - Avanza la narrazione dando al giocatore scelte significative
-            - Usa un tono narrativo coinvolgente ma non troppo drammatico
-            - Rispondi SEMPRE in italiano
-            - Usa un linguaggio ricco e descrittivo tipico della narrativa fantasy italiana
-            
-            Rispondi come il Game Master descrivendo cosa succede:
-            """, context, playerAction);
+        // Simple token validation - keep context reasonable
+        if (context.length() > 3000) {
+            context = truncateContextSimple(context);
+        }
+        
+        // Get language from system or default to Italian
+        String language = System.getProperty("rpg.language", "it");
+        var template = getPromptTemplate(language);
+        
+        return String.format(template, context, playerAction, getDifficultyLevel());
+    }
+    
+    private String getPromptTemplate(String language) {
+        return switch (language.toLowerCase()) {
+            case "it" -> """
+                Sei un Game Master AI per TSR Basic D&D ambientato in un mondo fantasy.
+                
+                CONTESTO DI GIOCO:
+                %s
+                
+                AZIONE DEL GIOCATORE: %s
+                DIFFICOLTÀ: %s
+                
+                Rispondi in 2-3 frasi vivide e immersive che:
+                • Riconoscano l'azione del giocatore con conseguenze appropriate
+                • Mantengano coerenza con le regole di D&D Basic
+                • Includano dettagli sensoriali specifici della location
+                • Offrano 1-2 opzioni di azione chiare per continuare
+                • Usino un tono narrativo coinvolgente ma non drammatico
+                
+                Risposta del Game Master:
+                """;
+            case "en" -> """
+                You are a Game Master AI for TSR Basic D&D set in a fantasy world.
+                
+                GAME CONTEXT:
+                %s
+                
+                PLAYER ACTION: %s
+                DIFFICULTY: %s
+                
+                Respond in 2-3 vivid, immersive sentences that:
+                • Acknowledge the player's action with appropriate consequences
+                • Maintain consistency with D&D Basic rules
+                • Include location-specific sensory details
+                • Offer 1-2 clear action options to continue
+                • Use engaging but not overly dramatic narrative tone
+                
+                Game Master Response:
+                """;
+            default -> getPromptTemplate("en"); // Fallback to English
+        };
+    }
+    
+    private String truncateContextSimple(String context) {
+        // Keep the most important parts for AI processing
+        var lines = context.split("\n");
+        var important = java.util.Arrays.stream(lines)
+            .filter(line -> line.contains("LOCATION") || 
+                           line.contains("CHARACTER") ||
+                           line.contains("RECENT") ||
+                           line.contains("HEALTH") ||
+                           line.contains("EQUIPMENT"))
+            .limit(12) // Keep reasonable context size
+            .collect(java.util.stream.Collectors.joining("\n"));
+        
+        return important + "\n[Context optimized for AI processing]";
+    }
+    
+    private String getDifficultyLevel() {
+        // Simple difficulty assessment - could be made configurable
+        return "Normale"; // Basic, Normal, Hard
     }
     
     private String buildNPCPrompt(String npcName, String personality, String context, String playerInput) {
@@ -318,23 +375,69 @@ public class ClaudeAIService {
             """, eventType, context);
     }
     
-    private AIResponse createFallbackResponse(String playerAction) {
-        return createFallbackResponse(playerAction, "AI service not configured");
+    private AIResponse createContextualFallback(String playerAction) {
+        return createContextualFallback(playerAction, "AI service not configured");
     }
     
-    private AIResponse createFallbackResponse(String playerAction, String reason) {
-        var fallbackText = switch (playerAction.toLowerCase()) {
-            case "/look around", "/look" -> 
-                "🏰 Osservi i dintorni, assorbendo l'atmosfera mistica di questo regno incantato.";
-            case "/attack goblin" -> 
-                "⚔️ Ti impegni in combattimento con la creatura, la tua arma luccica nella luce fioca!";
-            case "/talk tavern_keeper" -> 
-                "🍺 Il taverniere annuisce in segno di riconoscimento, pronto a condividere saggezza locale e racconti.";
-            default -> 
-                "✨ Il mondo risponde alla tua azione con magia antica, anche se i dettagli rimangono misteriosi.";
+    private AIResponse createContextualFallback(String playerAction, String reason) {
+        String actionType = extractActionType(playerAction);
+        String language = System.getProperty("rpg.language", "it");
+        
+        var fallbackText = switch (language.toLowerCase()) {
+            case "it" -> createItalianFallback(actionType, playerAction);
+            case "en" -> createEnglishFallback(actionType, playerAction);
+            default -> createItalianFallback(actionType, playerAction);
         };
         
         return AIResponse.fallback(fallbackText, reason);
+    }
+    
+    private String createItalianFallback(String actionType, String playerAction) {
+        return switch (actionType) {
+            case "move", "go" -> "🚶 Ti muovi attraverso l'ambiente con cautela, osservando i cambiamenti nel paesaggio circostante. Puoi continuare ad esplorare o fermarti per esaminare meglio.";
+            case "attack" -> "⚔️ Ti prepari per il combattimento, stringendo la tua arma. L'adrenalina scorre mentre valuti la situazione. Puoi attaccare direttamente o cercare una strategia migliore.";
+            case "search", "look", "examine" -> "👁️ Esamini attentamente l'area, cercando dettagli che potrebbero essere utili. Le ombre nascondono segreti che attendono di essere scoperti. Puoi guardare più da vicino o spostarti altrove.";
+            case "take", "pickup" -> "🤏 Raccogli l'oggetto con attenzione, sentendone il peso e la texture. Potrebbe essere utile nel tuo viaggio. Puoi esaminarlo meglio o continuare la tua esplorazione.";
+            case "talk", "speak" -> "💬 Inizi una conversazione, scegliendo le parole con cura. L'interazione sociale può rivelare informazioni preziose. Puoi approfondire il dialogo o salutare educatamente.";
+            case "rest", "sleep" -> "😴 Ti fermi per riposare, recuperando energie per le sfide future. Il tempo di riposo ti permette di riflettere sui tuoi progressi. Puoi continuare a riposare o riprendere il viaggio.";
+            default -> "✨ Il mondo fantasy risponde alla tua azione '" + playerAction + "' con misteriosa energia. Senti che qualcosa è cambiato, anche se i dettagli rimangono velati. Puoi provare un'altra azione o osservare meglio.";
+        };
+    }
+    
+    private String createEnglishFallback(String actionType, String playerAction) {
+        return switch (actionType) {
+            case "move", "go" -> "🚶 You move carefully through the environment, observing changes in the surrounding landscape. You can continue exploring or stop to examine more closely.";
+            case "attack" -> "⚔️ You prepare for combat, gripping your weapon firmly. Adrenaline flows as you assess the situation. You can attack directly or seek a better strategy.";
+            case "search", "look", "examine" -> "👁️ You carefully examine the area, looking for details that might be useful. Shadows hide secrets waiting to be discovered. You can look more closely or move elsewhere.";
+            case "take", "pickup" -> "🤏 You carefully pick up the object, feeling its weight and texture. It might be useful on your journey. You can examine it more closely or continue exploring.";
+            case "talk", "speak" -> "💬 You begin a conversation, choosing your words carefully. Social interaction can reveal valuable information. You can deepen the dialogue or politely say goodbye.";
+            case "rest", "sleep" -> "😴 You stop to rest, recovering energy for future challenges. Rest time allows you to reflect on your progress. You can continue resting or resume your journey.";
+            default -> "✨ The fantasy world responds to your action '" + playerAction + "' with mysterious energy. You sense something has changed, though details remain veiled. You can try another action or observe more carefully.";
+        };
+    }
+    
+    private String extractActionType(String playerAction) {
+        String action = playerAction.toLowerCase().trim();
+        
+        if (action.startsWith("/")) {
+            action = action.substring(1);
+        }
+        
+        if (action.startsWith("go ") || action.startsWith("move ") || action.contains("vai ") || action.contains("muovi")) {
+            return "move";
+        } else if (action.contains("attack") || action.contains("fight") || action.contains("attacca") || action.contains("combatti")) {
+            return "attack";
+        } else if (action.contains("look") || action.contains("search") || action.contains("examine") || action.contains("guarda") || action.contains("cerca") || action.contains("esamina")) {
+            return "search";
+        } else if (action.contains("take") || action.contains("pickup") || action.contains("get") || action.contains("prendi") || action.contains("raccogli")) {
+            return "take";
+        } else if (action.contains("talk") || action.contains("speak") || action.contains("say") || action.contains("parla") || action.contains("di'")) {
+            return "talk";
+        } else if (action.contains("rest") || action.contains("sleep") || action.contains("riposa") || action.contains("dormi")) {
+            return "rest";
+        } else {
+            return "generic";
+        }
     }
     
     private AIResponse createFallbackNPCResponse(String npcName, String playerInput) {
