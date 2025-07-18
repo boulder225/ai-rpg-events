@@ -1,16 +1,13 @@
 package com.eventsourcing.rpg;
 
-import com.eventsourcing.core.domain.CommandResult;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.ArrayList;
 
 /**
- * Business logic for processing RPG commands.
+ * Business logic for processing RPG commands (KISS version).
  * Contains the core domain rules and validations.
- * UPDATED: Added proper event sourcing support with CommandResult.
  */
 public class RPGBusinessLogic {
     // Create a new player state
@@ -159,153 +156,7 @@ public class RPGBusinessLogic {
             newHistory,
             Instant.now()
         );
-    }
-
-    /**
-     * Process a generic action command and return events to be persisted.
-     * This is the main integration point for event sourcing.
-     */
-    public static CommandResult<RPGEvent> performAction(RPGState.PlayerState playerState, RPGCommand.PerformAction command) {
-        try {
-            return switch (command.actionType().toLowerCase()) {
-                case "move", "go" -> {
-                    String target = command.target();
-                    if (target == null || target.isEmpty()) {
-                        yield CommandResult.failure("Move command requires a target location");
-                    }
-                    
-                    var moveEvent = new RPGEvent.PlayerMovedToLocation(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        playerState.currentLocationId(),
-                        target,
-                        command.issuedAt()
-                    );
-                    yield CommandResult.success(List.of(moveEvent));
-                }
-                
-                case "attack" -> {
-                    String target = command.target();
-                    if (target == null || target.isEmpty()) {
-                        yield CommandResult.failure("Attack command requires a target");
-                    }
-                    
-                    // Simulate combat outcome
-                    String outcome = Math.random() > 0.5 ? "hit" : "miss";
-                    var actionEvent = new RPGEvent.ActionPerformed(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        "attack",
-                        target,
-                        outcome,
-                        command.parameters(),
-                        command.issuedAt()
-                    );
-                    yield CommandResult.success(List.of(actionEvent));
-                }
-                
-                case "search", "examine", "look" -> {
-                    String target = command.target() != null ? command.target() : "surroundings";
-                    var actionEvent = new RPGEvent.ActionPerformed(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        command.actionType(),
-                        target,
-                        "searched",
-                        command.parameters(),
-                        command.issuedAt()
-                    );
-                    yield CommandResult.success(List.of(actionEvent));
-                }
-                
-                case "take", "pickup" -> {
-                    String target = command.target();
-                    if (target == null || target.isEmpty()) {
-                        yield CommandResult.failure("Take command requires an item target");
-                    }
-                    
-                    var itemEvent = new RPGEvent.ItemDiscovered(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        target,
-                        "equipment",
-                        playerState.currentLocationId(),
-                        command.issuedAt()
-                    );
-                    
-                    var actionEvent = new RPGEvent.ActionPerformed(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        "take",
-                        target,
-                        "taken",
-                        command.parameters(),
-                        command.issuedAt()
-                    );
-                    
-                    yield CommandResult.success(List.of(itemEvent, actionEvent));
-                }
-                
-                case "talk", "speak" -> {
-                    String target = command.target();
-                    if (target == null || target.isEmpty()) {
-                        yield CommandResult.failure("Talk command requires an NPC target");
-                    }
-                    
-                    var conversationEvent = new RPGEvent.ConversationOccurred(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        target,
-                        command.parameters().getOrDefault("topic", "general"),
-                        "started",
-                        command.issuedAt()
-                    );
-                    yield CommandResult.success(List.of(conversationEvent));
-                }
-                
-                case "rest", "sleep" -> {
-                    // Heal player to full health
-                    var healthEvent = new RPGEvent.PlayerHealthChanged(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        playerState.health(),
-                        Math.min(100, playerState.health() + 20), // Heal 20 HP
-                        "rest",
-                        command.issuedAt()
-                    );
-                    
-                    var actionEvent = new RPGEvent.ActionPerformed(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        "rest",
-                        "self",
-                        "rested",
-                        command.parameters(),
-                        command.issuedAt()
-                    );
-                    
-                    yield CommandResult.success(List.of(healthEvent, actionEvent));
-                }
-                
-                default -> {
-                    // Generic action
-                    var actionEvent = new RPGEvent.ActionPerformed(
-                        UUID.randomUUID().toString(),
-                        command.playerId(),
-                        command.actionType(),
-                        command.target() != null ? command.target() : "unknown",
-                        "attempted",
-                        command.parameters(),
-                        command.issuedAt()
-                    );
-                    yield CommandResult.success(List.of(actionEvent));
-                }
-            };
-            
-        } catch (Exception e) {
-            return CommandResult.failure("Failed to process action: " + e.getMessage());
         }
-    }
     
-    // Add more business logic as needed for NPCs, locations, etc.
+    // Add more KISS business logic as needed for NPCs, locations, etc.
 }
