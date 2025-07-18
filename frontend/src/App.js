@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 // API service
+const API_BASE = process.env.REACT_APP_API_URL || '';
 const api = {
   async createSession(playerName) {
-    const response = await fetch('/api/session/create', {
+    const response = await fetch(`${API_BASE}/api/session/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -16,7 +17,7 @@ const api = {
   },
 
   async executeAction(sessionId, command) {
-    const response = await fetch('/api/game/action', {
+    const response = await fetch(`${API_BASE}/api/game/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, command })
@@ -25,17 +26,17 @@ const api = {
   },
 
   async getStatus(sessionId) {
-    const response = await fetch(`/api/game/status?session_id=${sessionId}`);
+    const response = await fetch(`${API_BASE}/api/game/status?session_id=${sessionId}`);
     return response.json();
   },
 
   async getMetrics() {
-    const response = await fetch('/api/metrics');
+    const response = await fetch(`${API_BASE}/api/metrics`);
     return response.json();
   },
 
   async getMetadata() {
-    const response = await fetch('/api/game/metadata');
+    const response = await fetch(`${API_BASE}/api/game/metadata`);
     return response.json();
   }
 };
@@ -250,7 +251,7 @@ const ChatRPG = () => {
   // Helper to fetch and show adventure context
   const fetchAndShowAdventureContext = async (sid) => {
     try {
-      const resp = await fetch(`/api/game/status?session_id=${sid}`);
+      const resp = await fetch(`${API_BASE}/api/game/status?session_id=${sid}`);
       const data = await resp.json();
       if (data.success && data.context && data.context.adventure_context) {
         setChat(prev => [...prev, { sender: 'system', text: data.context.adventure_context }]);

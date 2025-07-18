@@ -360,4 +360,9 @@ public class ClaudeAIService {
     public boolean isConfigured() {
         return config.isConfigured();
     }
+
+    // Stub for compatibility with GenericGameContextManager
+    public String generateResponse(String prompt) {
+        return "[AI response stub for prompt: " + prompt + "]";
+    }
 }

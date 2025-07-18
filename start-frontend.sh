@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# AI-RPG Platform - Decoupled Frontend/Backend Startup
-echo "🎮 AI-RPG Event Sourcing Platform - React Frontend"
-echo "================================================="
+# AI-RPG Platform - Enhanced Frontend Startup with Location Context
+echo "🎮 AI-RPG Event Sourcing Platform - Enhanced React Frontend with Location Context"
+echo "=================================================================================="
 echo
 
 # Check if we're in the frontend directory
@@ -27,9 +27,29 @@ fi
 
 echo "🚀 Starting React development server..."
 echo "📍 Frontend will be available at: http://localhost:3000"
-echo "📡 Backend API should be running at: http://localhost:8080"
+echo "📡 Enhanced Backend API should be running at: http://localhost:8080"
 echo
-echo "💡 Make sure the backend server is running first!"
+echo "✨ Enhanced Features Available:"
+echo "   🎯 Real-time world state consistency"
+echo "   🛡️ D&D rules validation in real-time"
+echo "   🧠 AI responses with full context memory"
+echo "   📍 Location Context Awareness (NEW!)"
+echo "   📊 Enhanced metrics and debugging"
+echo
+echo "🆕 Location Context in Frontend:"
+echo "   🏠 Rich location descriptions in responses"
+echo "   🚪 Available exits shown contextually"
+echo "   💡 Lighting conditions affect gameplay"
+echo "   🗺️ Auto-updating world state display"
+echo "   🎮 Immersive environmental storytelling"
+echo
+echo "💡 Development Tips:"
+echo "   • Use commands like '/go cave_entrance' to test location changes"
+echo "   • Check browser console for location context updates"
+echo "   • Watch the status panel for real-time location info"
+echo "   • AI responses now include rich environmental details"
+echo
+echo "💡 Make sure the enhanced backend server is running first!"
 echo "   Run './start-backend.sh' in another terminal"
 echo
 

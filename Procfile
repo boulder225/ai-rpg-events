@@ -1,1 +1,1 @@
-web: build/install/ai-rpg-events/bin/ai-rpg-events
+web: serve -s build

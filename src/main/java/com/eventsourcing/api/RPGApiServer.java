@@ -4,6 +4,7 @@ import com.eventsourcing.rpg.*;
 import com.eventsourcing.core.infrastructure.InMemoryEventStore;
 import com.eventsourcing.ai.*;
 import com.eventsourcing.gameSystem.core.*;
+import com.eventsourcing.gameSystem.context.LocationContextManager;
 import com.eventsourcing.logging.RPGLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -37,14 +38,14 @@ public class RPGApiServer {
     private final RPGMetrics metrics;
     private final GameSystem gameSystem;
     private final AdventureData currentAdventure;
+    private final LocationContextManager locationContextManager;
     private final String aiLanguage;
     
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
         EnvLoader.loadDotEnv();
         
-        var eventStore = new InMemoryEventStore<RPGEvent>();
-        this.commandHandler = new RPGCommandHandler(eventStore);
+        this.commandHandler = new RPGCommandHandler();
         
         // Initialize Claude AI service
         var aiConfig = AIConfig.fromEnvironment();
@@ -60,6 +61,13 @@ public class RPGApiServer {
         defaultConfig.setProperty("game.adventure", "tsr_basic");
         this.gameSystem = GameSystemFactory.createFromConfig(defaultConfig);
         this.currentAdventure = gameSystem.loadAdventure(defaultConfig.getProperty("game.adventure", "tsr_basic"));
+        
+        // Initialize location context manager with adventure data and command handler
+        this.locationContextManager = new LocationContextManager(currentAdventure, commandHandler);
+        
+        // Connect the command handler to the location context manager
+        commandHandler.setLocationContextManager(locationContextManager);
+        
         // Language config (env or system property, default 'en')
         this.aiLanguage = System.getenv().getOrDefault("AI_LANGUAGE", System.getProperty("ai.language", "en"));
         
@@ -74,6 +82,8 @@ public class RPGApiServer {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         setupRoutes();
         server.setExecutor(Executors.newFixedThreadPool(10));
+        // Log all valid location IDs at startup
+        log.info("[STARTUP] Valid location IDs: {}", currentAdventure.locations().keySet());
         
         // Log AI configuration status
         if (aiService.isConfigured()) {
@@ -91,7 +101,7 @@ public class RPGApiServer {
         server.createContext("/api/session/create", new CreateSessionHandler());
         server.createContext("/api/game/action", new GameActionHandler());
         server.createContext("/api/game/status", new GameStatusHandler());
-        server.createContext("/api/ai/prompt", new AIPromptHandler());
+        server.createContext("/api/ai/prompt", new AIPromptKISSHandler());
         server.createContext("/api/metrics", new MetricsHandler());
         server.createContext("/api/game/metadata", exchange -> {
             if (!"GET".equals(exchange.getRequestMethod())) {
@@ -136,7 +146,6 @@ public class RPGApiServer {
             log.info("  POST /api/session/create - Create new adventure session");
             log.info("  POST /api/game/action - Execute game actions with AI responses");
             log.info("  GET  /api/game/status - Get complete world state");
-            log.info("  GET  /api/ai/prompt - View AI context prompt");
             log.info("  GET  /api/metrics - System performance metrics");
             log.info("  GET  /api/game/metadata - Game system configuration");
         }
@@ -175,15 +184,9 @@ public class RPGApiServer {
                 var sessionId = UUID.randomUUID().toString();
                 activeSessions.put(sessionId, request.playerId());
                 
-                // Create player in event store
-                commandHandler.executePlayerCommand(request.playerId(), playerState -> 
-                    RPGBusinessLogic.createPlayer(new RPGCommand.CreatePlayer(
-                        UUID.randomUUID().toString(),
-                        request.playerId(),
-                        request.playerName(),
-                        Instant.now()
-                    ))
-                );
+                // Create player using KISS business logic
+                var playerState = RPGBusinessLogic.createPlayer(request.playerId(), request.playerName());
+                commandHandler.putPlayerState(request.playerId(), playerState);
                 
                 metrics.incrementSessions();
                 
@@ -253,7 +256,7 @@ public class RPGApiServer {
                     return;
                 }
                 
-                var result = processGameActionWithAI(playerId, request.command());
+                var result = processGameActionWithAI_KISS(playerId, request.command());
                 metrics.incrementActions();
                 
                 sendJsonResponse(exchange, result, 200);
@@ -313,54 +316,6 @@ public class RPGApiServer {
         }
     }
     
-    // AI Prompt Handler
-    private class AIPromptHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
-                exchange.close();
-                return;
-            }
-            if (!"GET".equals(exchange.getRequestMethod())) {
-                sendMethodNotAllowed(exchange);
-                return;
-            }
-            
-            try {
-                var sessionId = getQueryParam(exchange, "session_id");
-                if (sessionId == null) {
-                    sendErrorResponse(exchange, "session_id parameter is required", 400);
-                    return;
-                }
-                
-                var playerId = activeSessions.get(sessionId);
-                if (playerId == null) {
-                    sendErrorResponse(exchange, "Session not found", 404);
-                    return;
-                }
-                
-                var prompt = generateAIPrompt(playerId);
-                
-                var response = new ApiModels.GameResponse(
-                    true,
-                    prompt,
-                    null,
-                    Map.of("ai_configured", aiService.isConfigured()),
-                    null
-                );
-                
-                sendJsonResponse(exchange, response, 200);
-                
-            } catch (Exception e) {
-                sendErrorResponse(exchange, "Failed to generate prompt: " + e.getMessage(), 500);
-            }
-        }
-    }
-    
     // Metrics Handler with AI metrics
     private class MetricsHandler implements HttpHandler {
         @Override
@@ -415,30 +370,81 @@ public class RPGApiServer {
         }
     }
     
+    // Normalize natural language commands to structured commands
+    private String normalizeCommand(String command) {
+        String trimmed = command.trim().toLowerCase();
+        // Match common movement phrases
+        // Examples: 'go north', 'move to cave', 'i go to the cave', 'enter dungeon', 'walk east'
+        String[] movementVerbs = {"go", "move", "walk", "head", "enter", "proceed", "travel"};
+        for (String verb : movementVerbs) {
+            if (trimmed.startsWith("i " + verb + " ")) {
+                trimmed = trimmed.substring(2); // Remove 'i '
+            }
+            if (trimmed.startsWith(verb + " ")) {
+                // Remove verb and possible prepositions
+                String rest = trimmed.substring(verb.length()).trim();
+                rest = rest.replaceFirst("^(to |into |towards |the )", "");
+                // Only allow single-word or hyphen/underscore location ids for now
+                String[] words = rest.split(" ");
+                if (words.length >= 1 && words[0].matches("[a-z0-9_-]+")) {
+                    return "/go " + words[0];
+                }
+                // If multi-word, join as one id (e.g. 'dark-cave')
+                if (words.length > 1) {
+                    String loc = String.join("-", words);
+                    return "/go " + loc;
+                }
+            }
+        }
+        return command;
+    }
+    
+    // Use Claude to extract/translate a structured command from user input, with valid location IDs
+    private String extractCommandWithClaude(String userMessage) {
+        // Get valid location IDs from the current adventure
+        String validLocations = String.join(", ", currentAdventure.locations().keySet());
+        String prompt = "Convert this user message into a structured RPG command (e.g., /go cave, /attack goblin, /take sword). " +
+                        "For movement commands, use ONLY the following location IDs: [" + validLocations + "] (case-sensitive). " +
+                        "If it is not a command, return the original message.\n\nMessage: '" + userMessage + "'";
+        // Use ClaudeAIService to get the result (synchronous call)
+        AIResponse aiResponse = aiService.generateGameMasterResponse(prompt, "command extraction");
+        if (aiResponse instanceof AIResponse.Success success) {
+            return success.content().trim();
+        } else if (aiResponse instanceof AIResponse.Fallback fallback) {
+            return fallback.content().trim();
+        } else if (aiResponse instanceof AIResponse.Error error) {
+            // If error, just return the original message (minimal fallback)
+            return userMessage;
+        }
+        return userMessage;
+    }
+    
     // Core game processing with Claude AI
     private ApiModels.GameResponse processGameActionWithAI(String playerId, String command) {
         var startTime = System.currentTimeMillis();
-        
-        try {
-            var playerState = commandHandler.getPlayerState(playerId);
-            
-            // Generate full context for AI
-            var gameContext = generateGameContextForAI(playerState);
-            
-            // Get sessionId from activeSessions (reverse lookup)
-            String sessionId = null;
-            for (var entry : activeSessions.entrySet()) {
-                if (entry.getValue().equals(playerId)) {
-                    sessionId = entry.getKey();
-                    break;
-                }
+        String sessionId = null;
+        for (var entry : activeSessions.entrySet()) {
+            if (entry.getValue().equals(playerId)) {
+                sessionId = entry.getKey();
+                break;
             }
+        }
+        try {
+            // Use Claude to extract/translate the command
+            String extractedCommand = extractCommandWithClaude(command);
+            // Normalize the extracted command
+            String normalizedCommand = normalizeCommand(extractedCommand);
+            // Add logs for debugging
+            log.info("[COMMAND DEBUG] Original: '{}' | Claude: '{}' | Normalized: '{}'", command, extractedCommand, normalizedCommand);
+            // FIRST: Process command and record events BEFORE generating AI context
+            // THEN: Get updated player state and generate context with current location
+            var playerState = commandHandler.getPlayerState(playerId);
+            var gameContext = generateGameContextForAI(playerState);
             String languageInstruction = "";
             if ("it".equalsIgnoreCase(aiLanguage)) {
                 languageInstruction = "Rispondi sempre in italiano.";
             }
             var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
-            
             // Record AI token usage if available
             switch (aiResponse) {
                 case AIResponse.Success success -> {
@@ -451,37 +457,136 @@ public class RPGApiServer {
                     // No token usage for error responses
                 }
             }
-            
-            // Process command and record events
-            commandHandler.executePlayerCommand(playerId, state -> {
-                return processCommandBasedOnType(playerId, command, state);
-            });
-            
-            var updatedState = commandHandler.getPlayerState(playerId);
-            var context = buildGameContext(updatedState, aiResponse);
-            
+            // Build context with the updated player state
+            var context = buildGameContext(playerState, aiResponse);
             metrics.recordResponseTime(System.currentTimeMillis() - startTime);
-            
             return new ApiModels.GameResponse(
                 true, 
                 aiResponse.content(), 
-                null, 
+                sessionId, 
                 context, 
                 null
             );
-            
         } catch (Exception e) {
             return new ApiModels.GameResponse(
                 false, 
                 null, 
-                null, 
+                sessionId, 
                 null, 
                 "Failed to process action: " + e.getMessage()
             );
         }
     }
     
+    // KISS version of processGameActionWithAI
+    private ApiModels.GameResponse processGameActionWithAI_KISS(String playerId, String command) {
+        var startTime = System.currentTimeMillis();
+        String sessionId = null;
+        for (var entry : activeSessions.entrySet()) {
+            if (entry.getValue().equals(playerId)) {
+                sessionId = entry.getKey();
+                break;
+            }
+        }
+        try {
+            // Use Claude to extract/translate the command
+            String extractedCommand = extractCommandWithClaude(command);
+            String normalizedCommand = normalizeCommand(extractedCommand);
+            log.info("[COMMAND DEBUG] Original: '{}' | Claude: '{}' | Normalized: '{}'", command, extractedCommand, normalizedCommand);
+            // Get current player state
+            var playerState = commandHandler.getPlayerState(playerId);
+            // Handle movement command
+            if (normalizedCommand.startsWith("/go ")) {
+                String toLocationId = normalizedCommand.substring(4).trim();
+                playerState = RPGBusinessLogic.movePlayer(playerState, toLocationId);
+                commandHandler.putPlayerState(playerId, playerState);
+            } else if (normalizedCommand.startsWith("/heal ")) {
+                try {
+                    int amount = Integer.parseInt(normalizedCommand.substring(6).trim());
+                    int newHealth = Math.min(100, playerState.health() + amount);
+                    playerState = RPGBusinessLogic.changePlayerHealth(playerState, newHealth);
+                    commandHandler.putPlayerState(playerId, playerState);
+                } catch (Exception e) {
+                    log.warn("[KISS] Invalid heal amount: {}", normalizedCommand);
+                }
+            } else if (normalizedCommand.startsWith("/skill ")) {
+                String[] parts = normalizedCommand.substring(7).trim().split(" ");
+                if (parts.length == 2) {
+                    String skillName = parts[0];
+                    try {
+                        int level = Integer.parseInt(parts[1]);
+                        playerState = RPGBusinessLogic.addPlayerSkill(playerState, skillName, level);
+                        commandHandler.putPlayerState(playerId, playerState);
+                    } catch (Exception e) {
+                        log.warn("[KISS] Invalid skill level: {}", normalizedCommand);
+                    }
+                }
+            } else if (normalizedCommand.startsWith("/startquest ")) {
+                String questId = normalizedCommand.substring(12).trim();
+                playerState = RPGBusinessLogic.startQuest(playerState, questId);
+                commandHandler.putPlayerState(playerId, playerState);
+            } else if (normalizedCommand.startsWith("/completequest ")) {
+                String questId = normalizedCommand.substring(15).trim();
+                playerState = RPGBusinessLogic.completeQuest(playerState, questId);
+                commandHandler.putPlayerState(playerId, playerState);
+            } else if (normalizedCommand.startsWith("/relationship ")) {
+                String[] parts = normalizedCommand.substring(14).trim().split(" ");
+                if (parts.length == 2) {
+                    String npcId = parts[0];
+                    String relationType = parts[1];
+                    playerState = RPGBusinessLogic.addRelationship(playerState, npcId, relationType);
+                    commandHandler.putPlayerState(playerId, playerState);
+                }
+            } else if (normalizedCommand.startsWith("/action ")) {
+                // Example: /action explore cave success cave_entrance
+                String[] parts = normalizedCommand.substring(8).trim().split(" ");
+                if (parts.length >= 4) {
+                    String actionType = parts[0];
+                    String target = parts[1];
+                    String outcome = parts[2];
+                    String locationId = parts[3];
+                    playerState = RPGBusinessLogic.addAction(playerState, actionType, target, outcome, locationId);
+                    commandHandler.putPlayerState(playerId, playerState);
+                }
+            }
+            // Get updated player state
+            var gameContext = generateGameContextForAI(playerState);
+            String languageInstruction = "";
+            if ("it".equalsIgnoreCase(aiLanguage)) {
+                languageInstruction = "Rispondi sempre in italiano.";
+            }
+            var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
+            var context = buildGameContext(playerState, aiResponse);
+            metrics.recordResponseTime(System.currentTimeMillis() - startTime);
+            return new ApiModels.GameResponse(
+                true,
+                aiResponse.content(),
+                sessionId,
+                context,
+                null
+            );
+        } catch (Exception e) {
+            return new ApiModels.GameResponse(
+                false,
+                null,
+                sessionId,
+                null,
+                "Failed to process action: " + e.getMessage()
+            );
+        }
+    }
+    
     private String generateGameContextForAI(RPGState.PlayerState playerState) {
+        // Use the enhanced location context manager for rich context
+        String baseContext = generateBasicGameContext(playerState);
+        
+        return locationContextManager.generateEnhancedAIPrompt(playerState, baseContext);
+    }
+    
+    /**
+     * Generate basic game context without location enhancement (for fallback)
+     */
+    private String generateBasicGameContext(RPGState.PlayerState playerState) {
         var context = new StringBuilder();
         
         // Add TSR Basic D&D Adventure context first
@@ -528,41 +633,6 @@ public class RPGApiServer {
         return context.toString();
     }
     
-    private com.eventsourcing.core.domain.CommandResult<RPGEvent> processCommandBasedOnType(
-            String playerId, String command, RPGState.PlayerState state) {
-        // Generic handler: if command is '/go <locationId>', treat as move
-        String trimmed = command.trim().toLowerCase();
-        if (trimmed.startsWith("/go ")) {
-            String toLocationId = trimmed.substring(4).trim().toLowerCase();
-            if (!toLocationId.isEmpty()) {
-                return RPGBusinessLogic.movePlayer(state, new RPGCommand.MovePlayer(
-                    UUID.randomUUID().toString(),
-                    playerId,
-                    toLocationId,
-                    Instant.now()
-                ));
-            }
-        }
-        // Otherwise, treat as generic action
-        return RPGBusinessLogic.performAction(state, new RPGCommand.PerformAction(
-            UUID.randomUUID().toString(), playerId, "unknown", "unknown",
-            Map.of("command", command), Instant.now()
-        ));
-    }
-    
-    private String generateAIPrompt(String playerId) {
-        var playerState = commandHandler.getPlayerState(playerId);
-        var context = generateGameContextForAI(playerState);
-        
-        return "🎭 CLAUDE AI GAME MASTER CONTEXT\n\n" + context + 
-               "\nCONFIGURATION:\n" +
-               "- AI Service: " + (aiService.isConfigured() ? "Claude AI" : "Simulation Mode") + "\n" +
-               "- Event Sourcing: Active\n" +
-               "- Persistent Context: Enabled\n\n" +
-               "This context is used to generate intelligent, personalized responses " +
-               "that consider the complete player journey and world state.";
-    }
-    
     private Map<String, Object> buildGameContext(RPGState.PlayerState playerState, AIResponse aiResponse) {
         var context = new HashMap<String, Object>();
         context.put("location", playerState.currentLocationId());
@@ -593,20 +663,27 @@ public class RPGApiServer {
     private Map<String, Object> buildContextSummary(RPGState.PlayerState playerState) {
         // Default to village if no location is set
         String currentLocation = playerState.currentLocationId();
+        log.info("[CONTEXT SUMMARY] Current location: {}", currentLocation);
         if (currentLocation == null || currentLocation.isEmpty()) {
             currentLocation = "village";
         }
-        // Add adventure context (location description, features, etc.)
-        String adventureContext = gameSystem.getAdventureContext(currentAdventure, currentLocation);
-        return Map.of(
-            "current_location", currentLocation,
-            "player_health", playerState.health(),
-            "total_actions", playerState.actionHistory().size(),
-            "active_quests", playerState.activeQuests(),
-            "npcs_met", playerState.relationships().keySet(),
-            "ai_service_configured", aiService.isConfigured(),
-            "adventure_context", adventureContext
-        );
+        // Get enhanced location context
+        var locationContext = locationContextManager.getFullLocationContext(currentLocation, playerState.playerId());
+        Map<String, Object> context = new HashMap<>();
+        context.put("current_location", currentLocation);
+        context.put("location_name", locationContext.name());
+        context.put("location_type", locationContext.type());
+        context.put("location_features", locationContext.features());
+        context.put("available_exits", locationContext.connections().keySet());
+        context.put("requires_light", locationContext.requiresLight());
+        context.put("has_been_explored", locationContext.hasBeenExplored());
+        context.put("player_health", playerState.health());
+        context.put("total_actions", playerState.actionHistory().size());
+        context.put("active_quests", playerState.activeQuests());
+        context.put("npcs_met", playerState.relationships().keySet());
+        context.put("ai_service_configured", aiService.isConfigured());
+        context.put("location_context_cache_size", locationContextManager.getCacheSize());
+        return context;
     }
     
     // Utility methods remain the same
@@ -656,5 +733,65 @@ public class RPGApiServer {
         exchange.getResponseHeaders().add("Allow", "POST, OPTIONS");
         exchange.sendResponseHeaders(405, -1);
         exchange.close();
+    }
+
+    // KISS AI Prompt Handler
+    private class AIPromptKISSHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+                return;
+            }
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                sendMethodNotAllowed(exchange);
+                return;
+            }
+            try {
+                var sessionId = getQueryParam(exchange, "session_id");
+                if (sessionId == null) {
+                    sendErrorResponse(exchange, "session_id parameter is required", 400);
+                    return;
+                }
+                var playerId = activeSessions.get(sessionId);
+                if (playerId == null) {
+                    sendErrorResponse(exchange, "Session not found", 404);
+                    return;
+                }
+                var playerState = commandHandler.getPlayerState(playerId);
+                if (playerState == null) {
+                    sendErrorResponse(exchange, "Player state not found", 404);
+                    return;
+                }
+                // Build a simple AI prompt context from player state
+                StringBuilder prompt = new StringBuilder();
+                prompt.append("AI GAME MASTER CONTEXT\n\n");
+                prompt.append("Player: ").append(playerState.name()).append("\n");
+                prompt.append("Location: ").append(playerState.currentLocationId()).append("\n");
+                prompt.append("Health: ").append(playerState.health()).append("\n");
+                prompt.append("Skills: ").append(playerState.skills().keySet()).append("\n");
+                prompt.append("Active Quests: ").append(playerState.activeQuests()).append("\n");
+                prompt.append("Relationships: ").append(playerState.relationships().keySet()).append("\n");
+                prompt.append("Recent Actions: ");
+                playerState.actionHistory().stream()
+                    .skip(Math.max(0, playerState.actionHistory().size() - 3))
+                    .forEach(action -> prompt.append(action.actionType()).append(" ").append(action.target()).append(", "));
+                prompt.append("\n");
+                var response = new ApiModels.GameResponse(
+                    true,
+                    prompt.toString(),
+                    null,
+                    Map.of("ai_configured", aiService.isConfigured()),
+                    null
+                );
+                sendJsonResponse(exchange, response, 200);
+            } catch (Exception e) {
+                sendErrorResponse(exchange, "Failed to generate prompt: " + e.getMessage(), 500);
+            }
+        }
     }
 }

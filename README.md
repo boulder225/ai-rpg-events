@@ -1,8 +1,35 @@
-# AI-RPG Event Sourcing Platform
+# AI-RPG Event Sourcing Platform with Location Context Awareness
 
-A comprehensive event sourcing platform for AI-powered RPG games with autonomous agents, persistent worlds, and evolving character relationships.
+A comprehensive event sourcing platform for AI-powered RPG games with autonomous agents, persistent worlds, evolving character relationships, and **rich location context awareness**.
+
+## 🎯 New Features
+
+### 📍 Location Context Awareness System (Latest!)
+- **Rich Environmental Context**: AI responses include detailed location descriptions, features, and available actions
+- **Automatic Context Updates**: Moving between locations automatically refreshes AI awareness
+- **Intelligent Exit Detection**: System knows all available exits and connections
+- **Environmental Conditions**: Lighting, exploration status, and atmospheric details
+- **Secret Integration**: Hidden features and discoveries seamlessly integrated
+- **Performance Caching**: Optimized context retrieval for smooth gameplay
 
 ## 🚀 Quick Start
+
+### Easy Startup Scripts
+
+**Backend Server:**
+```bash
+./start-backend.sh    # Enhanced with location context
+```
+
+**Frontend (React):**
+```bash
+./start-frontend.sh   # Now shows rich location details
+```
+
+**Test Location System:**
+```bash
+./test-location-context.sh  # Demo the new features
+```
 
 ### Setup Claude AI (Optional)
 
@@ -72,45 +99,91 @@ npm start
 - ✅ **Claude AI Enabled**: Real intelligent responses from Claude
 - ⚠️ **Simulation Mode**: Smart fallback responses (no API key needed)
 
-### API Endpoints
+### API Endpoints (Enhanced with Location Context)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/session/create` | Create new adventure session |
-| POST | `/api/game/action` | Execute game actions with AI responses |
-| GET | `/api/game/status` | Get complete world state |
-| GET | `/api/ai/prompt` | View AI context prompt |
-| GET | `/api/metrics` | System performance metrics |
+| Method | Endpoint | Description | Location Context Features |
+|--------|----------|-------------|---------------------------|
+| POST | `/api/session/create` | Create new adventure session | Starts with rich village context |
+| POST | `/api/game/action` | Execute game actions with AI responses | **Auto-refreshes location context on movement** |
+| GET | `/api/game/status` | Get complete world state | **Includes current location details, features, exits** |
+| GET | `/api/ai/prompt` | View AI context prompt | **Shows enhanced location context in prompts** |
+| GET | `/api/metrics` | System performance metrics | **Includes location context cache statistics** |
 
-### Example Usage
+#### 🆕 Location Context in API Responses
+
+All API responses now include enhanced location awareness:
+
+```json
+{
+  "success": true,
+  "message": "You enter the Snake's Treasure Chamber. The musty air is thick with danger...",
+  "context": {
+    "location_name": "Snake's Treasure Chamber",
+    "location_type": "dungeon",
+    "location_features": ["Treasure scattered", "Dark corners", "Musty air"],
+    "available_exits": ["passage", "north"],
+    "requires_light": true,
+    "has_been_explored": false,
+    "location_context_cache_size": 3
+  }
+}
+```
+
+### Example Usage (Enhanced with Location Context)
 
 ```bash
-# Create a new adventure session
+# Create a new adventure session with location context
 curl -X POST http://localhost:8080/api/session/create \
   -H "Content-Type: application/json" \
   -d '{"player_id":"hero123","player_name":"Aria the Mystic"}'
-# Response includes AI-generated welcome message
+# Response includes AI-generated welcome with rich village context
 
-# Execute game actions with intelligent AI responses
+# Move to a new location - triggers automatic context refresh
+curl -X POST http://localhost:8080/api/game/action \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"your-session-id","command":"/go cave_entrance"}'
+# AI response includes detailed cave entrance description, features, exits
+
+# Execute actions with full environmental awareness
 curl -X POST http://localhost:8080/api/game/action \
   -H "Content-Type: application/json" \
   -d '{"session_id":"your-session-id","command":"/look around"}'
-# AI analyzes full context and generates immersive descriptions
+# AI analyzes current location and generates contextual descriptions
 
-# Talk to NPCs with dynamic personality-driven dialogue
+# Talk to NPCs with location-specific dialogue
 curl -X POST http://localhost:8080/api/game/action \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"your-session-id","command":"/talk tavern_keeper"}'
-# Claude generates contextual NPC responses based on relationship history
+  -d '{"session_id":"your-session-id","command":"/talk aleena"}'
+# AI knows exact location context for realistic NPC interactions
 
-# Get world state with AI insights
+# Get world state with enhanced location details
 curl "http://localhost:8080/api/game/status?session_id=your-session-id"
+# Response includes current location features, exits, environmental conditions
 
-# View complete AI context sent to Claude
+# View complete AI context with location information
 curl "http://localhost:8080/api/ai/prompt?session_id=your-session-id"
+# Shows full location context sent to AI (features, connections, secrets)
 
-# Monitor AI performance metrics
+# Monitor performance including location context caching
 curl "http://localhost:8080/api/metrics"
+# Includes cache hit rates and location context performance stats
+```
+
+#### 🧪 Testing Location Context Features
+
+```bash
+# Run the location context demonstration
+./test-location-context.sh
+
+# Test specific location movements in the API:
+# Village → Cave Entrance → Snake Chamber → Aleena's Chamber
+
+# Commands to test:
+# "/go cave_entrance"    - Move to cave entrance
+# "/go snake_chamber"    - Enter dangerous treasure chamber  
+# "/go aleena_chamber"   - Visit cleric's meditation area
+# "/look around"         - Get location-specific descriptions
+# "/search"              - Find location-specific secrets
 ```
 
 ### Run Tests

@@ -1,0 +1,159 @@
+{
+  "session_id": "tsr_caves_chaos_001",
+  "created_at": "2025-07-11T14:30:00Z",
+  "last_updated": "2025-07-11T14:30:00Z",
+  "player_location": "village",
+  "adventure_phase": "preparation",
+  
+  "player_character": {
+    "name": "Brave Fighter",
+    "class": "Fighter",
+    "level": 1,
+    "alignment": "Lawful",
+    "current_hp": 8,
+    "max_hp": 8,
+    "armor_class": 4,
+    "ability_scores": {
+      "strength": 17,
+      "intelligence": 9,
+      "wisdom": 8,
+      "dexterity": 11,
+      "constitution": 16,
+      "charisma": 14
+    },
+    "saving_throws": {
+      "death_ray_poison": 12,
+      "magic_wands": 13,
+      "paralysis_stone": 14,
+      "dragon_breath": 15,
+      "spells": 16
+    },
+    "languages": ["Common", "Lawful"],
+    "equipment": {
+      "armor": "chain_mail",
+      "weapons": ["sword", "dagger"],
+      "items": [
+        "backpack", "lantern", "2_torches", "tinderbox",
+        "rope_50ft", "2_flasks_oil", "2_small_sacks",
+        "1_large_sack", "standard_rations", "waterskin"
+      ]
+    },
+    "money": {
+      "pp": 0,
+      "gp": 50,
+      "ep": 0,
+      "sp": 0,
+      "cp": 0,
+      "gems": []
+    },
+    "magic_items": [],
+    "experience_points": 0,
+    "status_effects": [],
+    "knowledge": [
+      "bargle_terrorizes_village",
+      "caves_contain_monsters_and_treasure",
+      "baldwick_is_village_armorer"
+    ]
+  },
+  
+  "world_state": {
+    "village": {
+      "id": "village",
+      "description": "Small frontier village with dirt roads",
+      "exits": ["cave_entrance"],
+      "items": [],
+      "characters_present": ["baldwick_armorer", "player"],
+      "features": ["baldwicks_armor_shop", "village_inn", "church"],
+      "recent_events": []
+    },
+    
+    "cave_entrance": {
+      "id": "cave_entrance",
+      "description": "Natural cave entrance in nearby hills",
+      "exits": ["village", "first_corridor"],
+      "items": [],
+      "characters_present": [],
+      "features": ["natural_light", "fresh_air", "rocky_entrance"],
+      "recent_events": []
+    },
+    
+    "statue_room": {
+      "id": "statue_room",
+      "description": "50' square room with stone statue of woman in armor in center",
+      "exits": ["north_corridor", "south_to_outside", "east_corridor", "west_corridor"],
+      "items": [],
+      "characters_present": [],
+      "features": ["stone_statue_woman_armor", "rough_rock_walls", "15ft_ceiling"],
+      "lighting": "requires_player_lantern",
+      "searched": false,
+      "note_location": "wall_niche",
+      "recent_events": []
+    }
+  },
+  
+  "npcs": {
+    "baldwick": {
+      "id": "baldwick",
+      "name": "Armorer Baldwick",
+      "location": "village",
+      "status": "alive",
+      "relationship_player": "childhood_acquaintance",
+      "personality": "jolly_graying_business_minded",
+      "inventory": {
+        "armor": ["plate_mail", "chain_mail", "various_repairs"],
+        "weapons": ["swords", "shields", "basic_equipment"]
+      },
+      "dialogue_history": [],
+      "current_mood": "friendly",
+      "services": ["armor_sales", "weapon_sales", "repairs"]
+    }
+  },
+  
+  "quest_progress": {
+    "find_bargle": {
+      "status": "not_started",
+      "description": "Find and stop Bargle the bandit who terrorizes the village",
+      "progress": [],
+      "objectives": [
+        "locate_bargle_hideout",
+        "confront_bargle",
+        "stop_terrorizing_activities"
+      ]
+    },
+    
+    "explore_caves": {
+      "status": "not_started",
+      "description": "Explore the dangerous caves for monsters and treasure",
+      "progress": [],
+      "areas_discovered": [],
+      "monsters_defeated": [],
+      "treasures_found": []
+    }
+  },
+  
+  "timeline": [
+    {
+      "timestamp": "2025-07-11T14:30:00Z",
+      "event": "adventure_started",
+      "location": "village",
+      "description": "Fighter begins quest to find Bargle"
+    }
+  ],
+  
+  "game_state": {
+    "current_encounter": null,
+    "in_combat": false,
+    "light_source": "none",
+    "party_members": ["player"],
+    "weather": "clear_day",
+    "time_of_day": "afternoon"
+  },
+  
+  "meta_information": {
+    "adventure_source": "TSR_Basic_DnD_Solo_Adventure",
+    "plugin_version": "TSRBasicDnDPlugin_1.0.0",
+    "context_manager_version": "GenericGameContextManager_1.0.0",
+    "ai_provider": "claude",
+    "validation_enabled": true
+  }
+}
