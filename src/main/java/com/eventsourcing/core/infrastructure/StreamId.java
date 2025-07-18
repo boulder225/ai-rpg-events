@@ -20,4 +20,17 @@ public record StreamId(String value) {
     public static StreamId location(String locationId) {
         return of("location", locationId);
     }
+    
+    // Alternative naming for clarity
+    public static StreamId forPlayer(String playerId) {
+        return player(playerId);
+    }
+    
+    public static StreamId forNPC(String npcId) {
+        return npc(npcId);
+    }
+    
+    public static StreamId forLocation(String locationId) {
+        return location(locationId);
+    }
 }
