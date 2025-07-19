@@ -7,12 +7,16 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility to load environment variables from .env file.
  * Automatically loads .env file if present and sets environment variables.
  */
 public class EnvLoader {
+    
+    private static final Logger log = LoggerFactory.getLogger(EnvLoader.class);
     
     private static boolean loaded = false;
     
@@ -28,7 +32,7 @@ public class EnvLoader {
         try {
             Path envFile = Paths.get(".env");
             if (Files.exists(envFile)) {
-                System.out.println("🔧 Loading environment variables from .env file");
+                log.info("🔧 Loading environment variables from .env file");
                 
                 var envVars = parseDotEnvFile(envFile);
                 envVars.forEach((key, value) -> {
@@ -45,12 +49,12 @@ public class EnvLoader {
                     }
                 });
                 
-                System.out.println("✅ Loaded " + envVars.size() + " environment variables");
+                log.info("✅ Loaded {} environment variables", envVars.size());
             } else {
-                System.out.println("ℹ️ No .env file found, using system environment variables");
+                log.info("ℹ️ No .env file found, using system environment variables");
             }
         } catch (IOException e) {
-            System.err.println("⚠️ Failed to load .env file: " + e.getMessage());
+            log.error("⚠️ Failed to load .env file: {}", e.getMessage());
         }
         
         loaded = true;

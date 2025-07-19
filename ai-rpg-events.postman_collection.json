@@ -1,0 +1,117 @@
+{
+  "info": {
+    "name": "AI-RPG Events API",
+    "description": "Postman collection for AI-RPG Event Sourcing Platform endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"player_id\": \"player123\",\n  \"player_name\": \"Enrico\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/session/create",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "session", "create"]
+        }
+      }
+    },
+    {
+      "name": "Game Action",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"{{session_id}}\",\n  \"command\": \"/go cave\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/game/action",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "game", "action"]
+        }
+      }
+    },
+    {
+      "name": "Game Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/game/status?session_id={{session_id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "game", "status"],
+          "query": [
+            { "key": "session_id", "value": "{{session_id}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "AI Prompt (Context)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/ai/prompt?session_id={{session_id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "ai", "prompt"],
+          "query": [
+            { "key": "session_id", "value": "{{session_id}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/metrics",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "metrics"]
+        }
+      }
+    },
+    {
+      "name": "Game Metadata",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/game/metadata",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "game", "metadata"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "session_id",
+      "value": ""
+    }
+  ]
+} 

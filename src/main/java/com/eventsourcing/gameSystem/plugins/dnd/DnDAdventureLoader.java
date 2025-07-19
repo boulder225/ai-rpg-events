@@ -8,12 +8,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 import com.eventsourcing.gameSystem.core.NPCData;
 import com.eventsourcing.gameSystem.core.EncounterData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * D&D Adventure loader that converts TSR Basic adventure data
  * to the generic AdventureData format.
  */
 public class DnDAdventureLoader {
+    
+    private static final Logger log = LoggerFactory.getLogger(DnDAdventureLoader.class);
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -77,7 +81,7 @@ public class DnDAdventureLoader {
             return convertToGenericFormat(original);
             
         } catch (IOException e) {
-            System.err.println("Failed to load TSR Basic adventure: " + e.getMessage());
+            log.error("Failed to load TSR Basic adventure: {}", e.getMessage());
             return createFallbackAdventure();
         }
     }

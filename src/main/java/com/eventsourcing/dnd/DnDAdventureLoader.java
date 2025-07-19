@@ -5,12 +5,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Loads D&D adventures and content from JSON resources.
  * Provides structured adventure content for AI context.
  */
 public class DnDAdventureLoader {
+    
+    private static final Logger log = LoggerFactory.getLogger(DnDAdventureLoader.class);
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -70,7 +74,7 @@ public class DnDAdventureLoader {
             }
             return objectMapper.readValue(inputStream, Adventure.class);
         } catch (IOException e) {
-            System.err.println("Failed to load adventure: " + e.getMessage());
+            log.error("Failed to load adventure: {}", e.getMessage());
             return createDefaultAdventure();
         }
     }
@@ -86,7 +90,7 @@ public class DnDAdventureLoader {
             }
             return objectMapper.readValue(inputStream, Adventure.class);
         } catch (IOException e) {
-            System.err.println("Failed to load TSR Basic adventure: " + e.getMessage());
+            log.error("Failed to load TSR Basic adventure: {}", e.getMessage());
             return createTSRBasicAdventure();
         }
     }

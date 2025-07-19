@@ -11,7 +11,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Example usage of the enhanced D&D Basic Game System with context management
@@ -24,78 +25,78 @@ import java.util.logging.Logger;
  */
 public class EnhancedDnDExample {
     
-    private static final Logger LOGGER = Logger.getLogger(EnhancedDnDExample.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(EnhancedDnDExample.class);
     // private static final ObjectMapper objectMapper = new ObjectMapper();
     
     public static void main(String[] args) {
         try {
             runEnhancedDnDDemo();
         } catch (Exception e) {
-            LOGGER.severe("Demo failed: " + e.getMessage());
+            log.error("Demo failed: {}", e.getMessage());
             e.printStackTrace();
         }
     }
     
     public static void runEnhancedDnDDemo() throws IOException {
-        System.out.println("========================================");
-        System.out.println("Enhanced D&D Basic Game System Demo");
-        System.out.println("========================================\n");
+        log.info("========================================");
+        log.info("Enhanced D&D Basic Game System Demo");
+        log.info("========================================\n");
         
         // Step 1: Initialize AI Service
-        System.out.println("1. Initializing Claude AI Service...");
+        log.info("1. Initializing Claude AI Service...");
         // AIConfig aiConfig = new AIConfig(); // Disabled: requires arguments
         AIConfig aiConfig = null; // Stub for compilation
         ClaudeAIService aiService = null; // new ClaudeAIService(aiConfig); // Disabled for compilation
-        System.out.println("✓ AI Service initialized\n");
+        log.info("✓ AI Service initialized\n");
         
         // Step 2: Create and initialize the game system
-        System.out.println("2. Creating Enhanced D&D Game System...");
+        log.info("2. Creating Enhanced D&D Game System...");
         DnDBasicGameSystem gameSystem = new DnDBasicGameSystem();
         // gameSystem.initializeContextManager(aiService); // Disabled for compilation
-        System.out.println("✓ Game system created with context management");
-        System.out.println("✓ TSR Basic D&D plugin loaded");
-        System.out.println("✓ World state tracking enabled\n");
+        log.info("✓ Game system created with context management");
+        log.info("✓ TSR Basic D&D plugin loaded");
+        log.info("✓ World state tracking enabled\n");
         
         // Step 3: Get the context manager
         // GenericGameContextManager contextManager = gameSystem.getContextManager(); // Disabled for compilation
         GenericGameContextManager contextManager = null; // Stub for compilation
         
         // Step 4: Create a character
-        System.out.println("3. Creating character...");
+        log.info("3. Creating character...");
         Map<String, Object> characterOptions = new HashMap<>();
         characterOptions.put("class", "Fighter");
         
         // Map<String, Object> character = gameSystem.createCharacter("Brave Adventurer", characterOptions); // Disabled for compilation
         Map<String, Object> character = Map.of("name", "Brave Adventurer", "class", "Fighter", "hit_points", 8, "armor_class", 4, "abilities", Map.of()); // Stub
-        System.out.println("✓ Character created: " + character.get("name"));
-        System.out.println("  Class: " + character.get("class"));
-        System.out.println("  HP: " + character.get("hit_points"));
-        System.out.println("  AC: " + character.get("armor_class"));
+        log.info("✓ Character created: " + character.get("name"));
+        log.info("  Class: " + character.get("class"));
+        log.info("  HP: " + character.get("hit_points"));
+        log.info("  AC: " + character.get("armor_class"));
         
         @SuppressWarnings("unchecked")
         Map<String, Integer> abilities = (Map<String, Integer>) character.get("abilities");
-        System.out.println("  Abilities: " + abilities);
-        System.out.println("✓ Character synced to context manager\n");
+        log.info("  Abilities: " + abilities);
+        log.info("✓ Character synced to context manager\n");
         
         // Step 5: Show current game context
-        System.out.println("4. Current Game Context:");
+        log.info("4. Current Game Context:");
         // JsonNode context = contextManager.getCurrentContext(); // Disabled for compilation
         // System.out.println(context.toPrettyString());
-        System.out.println();
+        log.info("");
         
         // Step 6: Interactive demo
-        System.out.println("5. Interactive Adventure (type 'quit' to exit):");
-        System.out.println("Try commands like:");
-        System.out.println("  - 'I go to the caves'");
-        System.out.println("  - 'I attack the rust monster with my sword'");
-        System.out.println("  - 'I search the room'");
-        System.out.println("  - 'I talk to Baldwick the armorer'");
-        System.out.println();
+        log.info("5. Interactive Adventure (type 'quit' to exit):");
+        log.info("Try commands like:");
+        log.info("  - 'I go to the caves'");
+        log.info("  - 'I attack the rust monster with my sword'");
+        log.info("  - 'I search the room'");
+        log.info("  - 'I talk to Baldwick the armorer'");
+        log.info("");
         
         Scanner scanner = new Scanner(System.in);
         
         while (true) {
-            System.out.print("> ");
+            log.info("> ");
             String userInput = scanner.nextLine().trim();
             
             if ("quit".equalsIgnoreCase(userInput)) {
@@ -108,12 +109,12 @@ public class EnhancedDnDExample {
             
             try {
                 // Process user input with full context validation
-                System.out.println("\nProcessing with context validation...");
+                log.info("\nProcessing with context validation...");
                 // String response = gameSystem.processUserInput(userInput); // Disabled for compilation
                 String response = "[Stubbed AI response for: " + userInput + "]";
                 
-                System.out.println("\nAI Response:");
-                System.out.println(response);
+                log.info("\nAI Response:");
+                log.info(response);
                 
                 // Show updated context (abbreviated)
                 // JsonNode updatedContext = contextManager.getCurrentContext(); // Disabled for compilation
@@ -128,16 +129,16 @@ public class EnhancedDnDExample {
                 //     }
                 // }
                 
-                System.out.println();
+                log.info("");
                 
             } catch (Exception e) {
-                System.out.println("Error processing input: " + e.getMessage());
-                System.out.println("This might be due to validation rules or AI service issues.");
-                System.out.println();
+                log.error("Error processing input: " + e.getMessage());
+                log.error("This might be due to validation rules or AI service issues.");
+                log.info("");
             }
         }
         
         scanner.close();
-        System.out.println("\nDemo completed. Thanks for playing!");
+        log.info("\nDemo completed. Thanks for playing!");
     }
 }

@@ -5,6 +5,9 @@ import com.eventsourcing.core.infrastructure.InMemoryEventStore;
 import com.eventsourcing.ai.*;
 import com.eventsourcing.gameSystem.core.*;
 import com.eventsourcing.gameSystem.context.LocationContextManager;
+import com.eventsourcing.gameSystem.context.GenericGameContextManager;
+import com.eventsourcing.gameSystem.context.GameContextManagerFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.eventsourcing.logging.RPGLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -40,6 +43,7 @@ public class RPGApiServer {
     private final AdventureData currentAdventure;
     private final LocationContextManager locationContextManager;
     private final String aiLanguage;
+    private final GenericGameContextManager genericGameContextManager;
     
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
@@ -64,6 +68,9 @@ public class RPGApiServer {
         
         // Initialize location context manager with adventure data and command handler
         this.locationContextManager = new LocationContextManager(currentAdventure, commandHandler);
+        
+        // Initialize GenericGameContextManager for state persistence
+        this.genericGameContextManager = GameContextManagerFactory.createTSRBasicDnDManager(aiService);
         
         // Connect the command handler to the location context manager
         commandHandler.setLocationContextManager(locationContextManager);
@@ -256,7 +263,7 @@ public class RPGApiServer {
                     return;
                 }
                 
-                var result = processGameActionWithAI_KISS(playerId, request.command());
+                var result = processGameActionWithAI(playerId, request.command());
                 metrics.incrementActions();
                 
                 sendJsonResponse(exchange, result, 200);
@@ -283,33 +290,28 @@ public class RPGApiServer {
                 sendMethodNotAllowed(exchange);
                 return;
             }
-            
             try {
                 var sessionId = getQueryParam(exchange, "session_id");
                 if (sessionId == null) {
                     sendErrorResponse(exchange, "session_id parameter is required", 400);
                     return;
                 }
-                
                 var playerId = activeSessions.get(sessionId);
                 if (playerId == null) {
                     sendErrorResponse(exchange, "Session not found", 404);
                     return;
                 }
-                
-                var playerState = commandHandler.getPlayerState(playerId);
-                var context = buildContextSummary(playerState);
-                
+                log.info("[STATUS] Fetching context for playerId: {} (sessionId: {})", playerId, sessionId);
+                var context = genericGameContextManager.getCurrentContext();
+                log.info("[STATUS] Context fetched: {}", context.toPrettyString());
                 var response = new ApiModels.GameResponse(
                     true,
-                    "World state retrieved from persistent event streams",
+                    "World state retrieved from persistent state file",
                     sessionId,
                     context,
                     null
                 );
-                
                 sendJsonResponse(exchange, response, 200);
-                
             } catch (Exception e) {
                 sendErrorResponse(exchange, "Failed to get status: " + e.getMessage(), 500);
             }
@@ -419,7 +421,7 @@ public class RPGApiServer {
         return userMessage;
     }
     
-    // Core game processing with Claude AI
+    // KISS version of processGameActionWithAI
     private ApiModels.GameResponse processGameActionWithAI(String playerId, String command) {
         var startTime = System.currentTimeMillis();
         String sessionId = null;
@@ -432,123 +434,88 @@ public class RPGApiServer {
         try {
             // Use Claude to extract/translate the command
             String extractedCommand = extractCommandWithClaude(command);
-            // Normalize the extracted command
-            String normalizedCommand = normalizeCommand(extractedCommand);
-            // Add logs for debugging
-            log.info("[COMMAND DEBUG] Original: '{}' | Claude: '{}' | Normalized: '{}'", command, extractedCommand, normalizedCommand);
-            // FIRST: Process command and record events BEFORE generating AI context
-            // THEN: Get updated player state and generate context with current location
-            var playerState = commandHandler.getPlayerState(playerId);
-            var gameContext = generateGameContextForAI(playerState);
-            String languageInstruction = "";
-            if ("it".equalsIgnoreCase(aiLanguage)) {
-                languageInstruction = "Rispondi sempre in italiano.";
-            }
-            var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
-            // Record AI token usage if available
-            switch (aiResponse) {
-                case AIResponse.Success success -> {
-                    aiService.getMetrics().recordTokenUsage(success.getTotalTokens());
-                }
-                case AIResponse.Fallback fallback -> {
-                    // No token usage for fallback responses
-                }
-                case AIResponse.Error error -> {
-                    // No token usage for error responses
-                }
-            }
-            // Build context with the updated player state
-            var context = buildGameContext(playerState, aiResponse);
-            metrics.recordResponseTime(System.currentTimeMillis() - startTime);
-            return new ApiModels.GameResponse(
-                true, 
-                aiResponse.content(), 
-                sessionId, 
-                context, 
-                null
-            );
-        } catch (Exception e) {
-            return new ApiModels.GameResponse(
-                false, 
-                null, 
-                sessionId, 
-                null, 
-                "Failed to process action: " + e.getMessage()
-            );
-        }
-    }
-    
-    // KISS version of processGameActionWithAI
-    private ApiModels.GameResponse processGameActionWithAI_KISS(String playerId, String command) {
-        var startTime = System.currentTimeMillis();
-        String sessionId = null;
-        for (var entry : activeSessions.entrySet()) {
-            if (entry.getValue().equals(playerId)) {
-                sessionId = entry.getKey();
-                break;
-            }
-        }
-        try {
-            // Use Claude to extract/translate the command
-            String extractedCommand = extractCommandWithClaude(command);
-            String normalizedCommand = normalizeCommand(extractedCommand);
-            log.info("[COMMAND DEBUG] Original: '{}' | Claude: '{}' | Normalized: '{}'", command, extractedCommand, normalizedCommand);
+            String normalizedCommand = normalizeCommand(extractedCommand).trim().toLowerCase();
+            log.info("[COMMAND DEBUG] Original Message: '{}' | Extracted Message by Claude: '{}' | Normalized Message: '{}'", command, extractedCommand, normalizedCommand);
+            
+            // Parse the command more reliably
+            CommandInfo parsedCommand = parseCommand(normalizedCommand);
+            log.info("[PARSE DEBUG] Command: '{}', Type: '{}', Target: '{}'", normalizedCommand, parsedCommand.type(), parsedCommand.target());
+            log.info("[COMMAND PARSED] Type: {}, Target: {}, Parameters: {}", parsedCommand.type(), parsedCommand.target(), parsedCommand.parameters());
+            
             // Get current player state
             var playerState = commandHandler.getPlayerState(playerId);
-            // Handle movement command
-            if (normalizedCommand.startsWith("/go ")) {
-                String toLocationId = normalizedCommand.substring(4).trim();
-                playerState = RPGBusinessLogic.movePlayer(playerState, toLocationId);
-                commandHandler.putPlayerState(playerId, playerState);
-            } else if (normalizedCommand.startsWith("/heal ")) {
-                try {
-                    int amount = Integer.parseInt(normalizedCommand.substring(6).trim());
-                    int newHealth = Math.min(100, playerState.health() + amount);
-                    playerState = RPGBusinessLogic.changePlayerHealth(playerState, newHealth);
+            
+            // Handle different command types
+            switch (parsedCommand.type()) {
+                case "go" -> {
+                    String toLocationId = parsedCommand.target();
+                    log.info("[MOVE] Player {} moving from {} to {}", playerId, playerState.currentLocationId(), toLocationId);
+                    playerState = RPGBusinessLogic.movePlayer(playerState, toLocationId);
                     commandHandler.putPlayerState(playerId, playerState);
-                } catch (Exception e) {
-                    log.warn("[KISS] Invalid heal amount: {}", normalizedCommand);
+                    // Persist new location to adventure_state.json
+                    ObjectNode changes = objectMapper.createObjectNode();
+                    changes.put("player_location", toLocationId);
+                    log.info("[MOVE] Persisting new player_location to adventure_state.json: {}", toLocationId);
+                    genericGameContextManager.updateState(changes);
                 }
-            } else if (normalizedCommand.startsWith("/skill ")) {
-                String[] parts = normalizedCommand.substring(7).trim().split(" ");
-                if (parts.length == 2) {
-                    String skillName = parts[0];
+                case "heal" -> {
                     try {
-                        int level = Integer.parseInt(parts[1]);
-                        playerState = RPGBusinessLogic.addPlayerSkill(playerState, skillName, level);
+                        int amount = Integer.parseInt(parsedCommand.target());
+                        int newHealth = Math.min(100, playerState.health() + amount);
+                        playerState = RPGBusinessLogic.changePlayerHealth(playerState, newHealth);
                         commandHandler.putPlayerState(playerId, playerState);
-                    } catch (Exception e) {
-                        log.warn("[KISS] Invalid skill level: {}", normalizedCommand);
+                    } catch (NumberFormatException e) {
+                        log.warn("[KISS] Invalid heal amount: {}", parsedCommand.target());
                     }
                 }
-            } else if (normalizedCommand.startsWith("/startquest ")) {
-                String questId = normalizedCommand.substring(12).trim();
-                playerState = RPGBusinessLogic.startQuest(playerState, questId);
-                commandHandler.putPlayerState(playerId, playerState);
-            } else if (normalizedCommand.startsWith("/completequest ")) {
-                String questId = normalizedCommand.substring(15).trim();
-                playerState = RPGBusinessLogic.completeQuest(playerState, questId);
-                commandHandler.putPlayerState(playerId, playerState);
-            } else if (normalizedCommand.startsWith("/relationship ")) {
-                String[] parts = normalizedCommand.substring(14).trim().split(" ");
-                if (parts.length == 2) {
-                    String npcId = parts[0];
-                    String relationType = parts[1];
-                    playerState = RPGBusinessLogic.addRelationship(playerState, npcId, relationType);
+                case "skill" -> {
+                    String[] parts = parsedCommand.target().split(" ");
+                    if (parts.length == 2) {
+                        String skillName = parts[0];
+                        try {
+                            int level = Integer.parseInt(parts[1]);
+                            playerState = RPGBusinessLogic.addPlayerSkill(playerState, skillName, level);
+                            commandHandler.putPlayerState(playerId, playerState);
+                        } catch (NumberFormatException e) {
+                            log.warn("[KISS] Invalid skill level: {}", parsedCommand.target());
+                        }
+                    }
+                }
+                case "startquest" -> {
+                    String questId = parsedCommand.target();
+                    playerState = RPGBusinessLogic.startQuest(playerState, questId);
                     commandHandler.putPlayerState(playerId, playerState);
                 }
-            } else if (normalizedCommand.startsWith("/action ")) {
-                // Example: /action explore cave success cave_entrance
-                String[] parts = normalizedCommand.substring(8).trim().split(" ");
-                if (parts.length >= 4) {
-                    String actionType = parts[0];
-                    String target = parts[1];
-                    String outcome = parts[2];
-                    String locationId = parts[3];
-                    playerState = RPGBusinessLogic.addAction(playerState, actionType, target, outcome, locationId);
+                case "completequest" -> {
+                    String questId = parsedCommand.target();
+                    playerState = RPGBusinessLogic.completeQuest(playerState, questId);
                     commandHandler.putPlayerState(playerId, playerState);
+                }
+                case "relationship" -> {
+                    String[] parts = parsedCommand.target().split(" ");
+                    if (parts.length == 2) {
+                        String npcId = parts[0];
+                        String relationType = parts[1];
+                        playerState = RPGBusinessLogic.addRelationship(playerState, npcId, relationType);
+                        commandHandler.putPlayerState(playerId, playerState);
+                    }
+                }
+                case "action" -> {
+                    String[] parts = parsedCommand.target().split(" ");
+                    if (parts.length >= 4) {
+                        String actionType = parts[0];
+                        String target = parts[1];
+                        String outcome = parts[2];
+                        String locationId = parts[3];
+                        playerState = RPGBusinessLogic.addAction(playerState, actionType, target, outcome, locationId);
+                        commandHandler.putPlayerState(playerId, playerState);
+                    }
+                }
+                default -> {
+                    log.info("[COMMAND] Unknown command type: {}, treating as natural language", parsedCommand.type());
                 }
             }
+            
             // Get updated player state
             var gameContext = generateGameContextForAI(playerState);
             String languageInstruction = "";
@@ -575,6 +542,92 @@ public class RPGApiServer {
             );
         }
     }
+    
+    /**
+     * Parse a command string into structured command information
+     */
+    private CommandInfo parseCommand(String command) {
+        String trimmed = command.trim();
+        log.info("[PARSE DEBUG] (parseCommand) trimmed command: '{}'", trimmed);
+        
+        // First, try to extract embedded commands from AI responses
+        String extractedCommand = extractEmbeddedCommand(trimmed);
+        if (extractedCommand != null) {
+            log.info("[PARSE DEBUG] (parseCommand) Extracted embedded command: '{}'", extractedCommand);
+            trimmed = extractedCommand;
+        }
+        
+        // Handle commands that start with /
+        if (trimmed.startsWith("/")) {
+            // Remove the first / and any leading whitespace
+            String afterSlash = trimmed.substring(1).trim();
+            
+            // Split on first whitespace to get command type and target
+            String[] parts = afterSlash.split("\\s+", 2);
+            String commandType = parts[0].toLowerCase();
+            String target = parts.length > 1 ? parts[1] : "";
+            
+            log.info("[PARSE DEBUG] (parseCommand) Raw: '{}', AfterSlash: '{}', Type: '{}', Target: '{}'", 
+                command, afterSlash, commandType, target);
+            
+            // Validate command type is not empty
+            if (commandType.isEmpty()) {
+                log.warn("[PARSE DEBUG] Empty command type detected, treating as natural language");
+                return new CommandInfo("natural", trimmed, Map.of());
+            }
+            
+            return new CommandInfo(commandType, target, Map.of());
+        }
+        
+        // Handle natural language commands (no / prefix)
+        log.info("[PARSE DEBUG] (parseCommand) Raw: '{}', Type: 'natural', Target: '{}'", command, trimmed);
+        return new CommandInfo("natural", trimmed, Map.of());
+    }
+    
+    /**
+     * Extract embedded commands from AI responses
+     * Looks for patterns like bold markdown commands or slash commands within the text
+     */
+    private String extractEmbeddedCommand(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        
+        // Pattern 1: Look for **/command** (bold markdown with command)
+        var boldPattern = java.util.regex.Pattern.compile("\\*\\*/([^\\*]+)\\*\\*");
+        var boldMatcher = boldPattern.matcher(text);
+        if (boldMatcher.find()) {
+            String command = boldMatcher.group(1).trim();
+            log.info("[PARSE DEBUG] (extractEmbeddedCommand) Found bold command: '{}'", command);
+            return "/" + command;
+        }
+        
+        // Pattern 2: Look for /command within the text (not at start)
+        var slashPattern = java.util.regex.Pattern.compile("\\s+/([^\\s]+(?:\\s+[^\\s]+)*)");
+        var slashMatcher = slashPattern.matcher(text);
+        if (slashMatcher.find()) {
+            String command = slashMatcher.group(1).trim();
+            log.info("[PARSE DEBUG] (extractEmbeddedCommand) Found embedded slash command: '{}'", command);
+            return "/" + command;
+        }
+        
+        // Pattern 3: Look for "command" in quotes
+        var quotePattern = java.util.regex.Pattern.compile("\"/([^\"]+)\"");
+        var quoteMatcher = quotePattern.matcher(text);
+        if (quoteMatcher.find()) {
+            String command = quoteMatcher.group(1).trim();
+            log.info("[PARSE DEBUG] (extractEmbeddedCommand) Found quoted command: '{}'", command);
+            return "/" + command;
+        }
+        
+        log.info("[PARSE DEBUG] (extractEmbeddedCommand) No embedded command found in text");
+        return null;
+    }
+    
+    /**
+     * Command information record
+     */
+    private record CommandInfo(String type, String target, Map<String, String> parameters) {}
     
     private String generateGameContextForAI(RPGState.PlayerState playerState) {
         // Use the enhanced location context manager for rich context
@@ -762,28 +815,12 @@ public class RPGApiServer {
                     sendErrorResponse(exchange, "Session not found", 404);
                     return;
                 }
-                var playerState = commandHandler.getPlayerState(playerId);
-                if (playerState == null) {
-                    sendErrorResponse(exchange, "Player state not found", 404);
-                    return;
-                }
-                // Build a simple AI prompt context from player state
-                StringBuilder prompt = new StringBuilder();
-                prompt.append("AI GAME MASTER CONTEXT\n\n");
-                prompt.append("Player: ").append(playerState.name()).append("\n");
-                prompt.append("Location: ").append(playerState.currentLocationId()).append("\n");
-                prompt.append("Health: ").append(playerState.health()).append("\n");
-                prompt.append("Skills: ").append(playerState.skills().keySet()).append("\n");
-                prompt.append("Active Quests: ").append(playerState.activeQuests()).append("\n");
-                prompt.append("Relationships: ").append(playerState.relationships().keySet()).append("\n");
-                prompt.append("Recent Actions: ");
-                playerState.actionHistory().stream()
-                    .skip(Math.max(0, playerState.actionHistory().size() - 3))
-                    .forEach(action -> prompt.append(action.actionType()).append(" ").append(action.target()).append(", "));
-                prompt.append("\n");
+                log.info("[PROMPT] Fetching context for playerId: {} (sessionId: {})", playerId, sessionId);
+                var context = genericGameContextManager.getCurrentContext();
+                log.info("[PROMPT] Context fetched: {}", context.toPrettyString());
                 var response = new ApiModels.GameResponse(
                     true,
-                    prompt.toString(),
+                    context.toPrettyString(),
                     null,
                     Map.of("ai_configured", aiService.isConfigured()),
                     null

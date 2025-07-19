@@ -7,6 +7,8 @@ import com.eventsourcing.rpg.*;
 import com.eventsourcing.core.infrastructure.InMemoryEventStore;
 import java.time.Instant;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Example demonstrating the enhanced location context awareness system.
@@ -14,10 +16,11 @@ import java.util.*;
  * characters move between locations.
  */
 public class LocationContextExample {
+    private static final Logger log = LoggerFactory.getLogger(LocationContextExample.class);
     
     public static void main(String[] args) {
         // KISS: Example disabled due to event sourcing removal
-        System.out.println("LocationContextExample is currently disabled due to event sourcing refactor.");
+        log.info("LocationContextExample is currently disabled due to event sourcing refactor.");
     }
     
     private static void demonstrateLocationContext(LocationContextManager manager, 
@@ -26,29 +29,29 @@ public class LocationContextExample {
         
         LocationContext context = manager.getFullLocationContext(locationId, playerId);
         
-        System.out.println("📍 Location: " + context.name());
-        System.out.println("   Type: " + context.type());
-        System.out.println("   Description: " + context.description());
+        log.info("📍 Location: " + context.name());
+        log.info("   Type: " + context.type());
+        log.info("   Description: " + context.description());
         
         if (!context.features().isEmpty()) {
-            System.out.println("   Features: " + String.join(", ", context.features()));
+            log.info("   Features: " + String.join(", ", context.features()));
         }
         
         if (!context.connections().isEmpty()) {
-            System.out.println("   Exits:");
+            log.info("   Exits:");
             context.connections().forEach((direction, target) -> 
-                System.out.println("     " + direction + " → " + target));
+                log.info("     " + direction + " → " + target));
         }
         
         if (context.requiresLight()) {
-            System.out.println("   ⚠️  Requires light source");
+            log.info("   ⚠️  Requires light source");
         }
         
         if (context.hasSecrets()) {
-            System.out.println("   🗝️  Contains secrets");
+            log.info("   🗝️  Contains secrets");
         }
         
-        System.out.println("   Explored: " + (context.hasBeenExplored() ? "Yes" : "No"));
+        log.info("   Explored: " + (context.hasBeenExplored() ? "Yes" : "No"));
     }
     
     /**

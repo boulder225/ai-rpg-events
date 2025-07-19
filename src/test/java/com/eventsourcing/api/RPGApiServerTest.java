@@ -12,6 +12,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Integration tests for the AI-RPG API Server.
@@ -19,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class RPGApiServerTest {
     
+    private static final Logger log = LoggerFactory.getLogger(RPGApiServerTest.class);
     private RPGApiServer server;
     private HttpClient client;
     private static final int TEST_PORT = 8888;
@@ -64,7 +67,7 @@ class RPGApiServerTest {
         var response = client.send(request, HttpResponse.BodyHandlers.ofString());
         
         assertEquals(200, response.statusCode());
-        System.out.println("RESPONSE BODY: " + response.body());
+        log.info("RESPONSE BODY: {}", response.body());
         assertTrue(response.body().contains("\"success\":true"));
         assertTrue(response.body().contains("session_id"));
     }
