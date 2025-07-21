@@ -526,10 +526,28 @@ public class RPGApiServer {
             }
             var aiResponse = aiService.generateGameMasterResponse(gameContext, command + (languageInstruction.isEmpty() ? "" : ("\n" + languageInstruction)));
             var context = buildGameContext(playerState, aiResponse);
+            boolean aiOverloaded = false;
+            String userMessage;
+            switch (aiResponse) {
+                case AIResponse.Success success -> userMessage = success.content();
+                case AIResponse.Fallback fallback -> userMessage = fallback.content();
+                case AIResponse.Error error -> {
+                    if (error.errorMessage() != null && error.errorMessage().toLowerCase().contains("overloaded")) {
+                        userMessage = "⚠️ The AI Dungeon Master is currently overloaded. You are seeing a fallback response or may need to try again in a moment.";
+                        aiOverloaded = true;
+                    } else {
+                        userMessage = "An unexpected error occurred: " + error.errorMessage();
+                    }
+                }
+                default -> userMessage = "Unknown AI response.";
+            }
+            if (context != null) {
+                context.put("ai_overloaded", aiOverloaded);
+            }
             metrics.recordResponseTime(System.currentTimeMillis() - startTime);
             return new ApiModels.GameResponse(
                 true,
-                aiResponse.content(),
+                userMessage,
                 sessionId,
                 context,
                 null
