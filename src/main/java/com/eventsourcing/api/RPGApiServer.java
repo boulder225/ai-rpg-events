@@ -463,8 +463,13 @@ public class RPGApiServer {
                             log.info("[MOVE] Normalized movement target '{}' to valid location ID '{}'", toLocationId, normalizedLocationId);
                         } else {
                             log.warn("[MOVE] Invalid movement target '{}': not a valid location ID", toLocationId);
-                            // Optionally, return an error or fallback here
-                            break;
+                            return new ApiModels.GameResponse(
+                                false,
+                                "Invalid location: '" + toLocationId + "' is not a valid destination.",
+                                sessionId,
+                                null,
+                                "Invalid location ID"
+                            );
                         }
                     }
                     log.info("[MOVE] Player {} moving from {} to {}", playerId, playerState.currentLocationId(), normalizedLocationId);
