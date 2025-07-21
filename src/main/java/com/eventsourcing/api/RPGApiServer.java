@@ -589,37 +589,33 @@ public class RPGApiServer {
      */
     private CommandInfo parseCommand(String command) {
         String trimmed = command.trim();
-        log.info("[PARSE DEBUG] (parseCommand) trimmed command: '{}'", trimmed);
-        
+        log.info("[PARSE DEBUG] (parseCommand) initial trimmed command: '{}'", trimmed);
+        // Remove markdown asterisks and bold/italic formatting
+        trimmed = trimmed.replaceAll("^[*]+|[*]+$", "").trim();
+        log.info("[PARSE DEBUG] (parseCommand) after markdown strip: '{}'", trimmed);
         // First, try to extract embedded commands from AI responses
         String extractedCommand = extractEmbeddedCommand(trimmed);
         if (extractedCommand != null) {
             log.info("[PARSE DEBUG] (parseCommand) Extracted embedded command: '{}'", extractedCommand);
             trimmed = extractedCommand;
         }
-        
         // Handle commands that start with /
         if (trimmed.startsWith("/")) {
             // Remove the first / and any leading whitespace
             String afterSlash = trimmed.substring(1).trim();
-            
+            log.info("[PARSE DEBUG] (parseCommand) afterSlash: '{}'", afterSlash);
             // Split on first whitespace to get command type and target
             String[] parts = afterSlash.split("\\s+", 2);
             String commandType = parts[0].toLowerCase();
             String target = parts.length > 1 ? parts[1] : "";
-            
-            log.info("[PARSE DEBUG] (parseCommand) Raw: '{}', AfterSlash: '{}', Type: '{}', Target: '{}'", 
-                command, afterSlash, commandType, target);
-            
+            log.info("[PARSE DEBUG] (parseCommand) Raw: '{}', AfterSlash: '{}', Type: '{}', Target: '{}'", command, afterSlash, commandType, target);
             // Validate command type is not empty
             if (commandType.isEmpty()) {
                 log.warn("[PARSE DEBUG] Empty command type detected, treating as natural language");
                 return new CommandInfo("natural", trimmed, Map.of());
             }
-            
             return new CommandInfo(commandType, target, Map.of());
         }
-        
         // Handle natural language commands (no / prefix)
         log.info("[PARSE DEBUG] (parseCommand) Raw: '{}', Type: 'natural', Target: '{}'", command, trimmed);
         return new CommandInfo("natural", trimmed, Map.of());
