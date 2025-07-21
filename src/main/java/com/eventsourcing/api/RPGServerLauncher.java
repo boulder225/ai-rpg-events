@@ -12,10 +12,12 @@ public class RPGServerLauncher {
     private static final Logger log = LoggerFactory.getLogger(RPGServerLauncher.class);
     
     public static void main(String[] args) {
+        // Use PORT env variable if present (Heroku), else fallback to CLI arg, else 8080
         int port = 8080;
-        
-        // Parse command line arguments
-        if (args.length > 0) {
+        String portEnv = System.getenv("PORT");
+        if (portEnv != null) {
+            port = Integer.parseInt(portEnv);
+        } else if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (NumberFormatException e) {
