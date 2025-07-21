@@ -25,20 +25,17 @@ public class GenericGameContextManager {
     private final ClaudeAIService aiService;
     private final List<GameSystemPlugin> plugins;
     private final String gameDataFile;
-    private final String stateFile;
     
     private JsonNode gameData;
     private JsonNode state;
     
-    public GenericGameContextManager(String gameDataFile, String stateFile, ClaudeAIService aiService) {
+    public GenericGameContextManager(String gameDataFile, ClaudeAIService aiService) {
         this.objectMapper = new ObjectMapper();
         this.aiService = aiService;
         this.plugins = new ArrayList<>();
         this.gameDataFile = gameDataFile;
-        this.stateFile = stateFile;
-        
         loadGameData();
-        loadOrCreateState();
+        this.state = createInitialState();
     }
     
     /**
@@ -131,8 +128,6 @@ public class GenericGameContextManager {
                 LOGGER.warning("Plugin " + plugin.getName() + " afterStateUpdate failed: " + e.getMessage());
             }
         }
-        
-        saveState();
     }
     
     /**
@@ -181,20 +176,6 @@ public class GenericGameContextManager {
         }
     }
     
-    private void loadOrCreateState() {
-        try {
-            File file = new File(stateFile);
-            if (file.exists()) {
-                state = objectMapper.readTree(file);
-            } else {
-                state = createInitialState();
-                saveState();
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load/create state file: " + stateFile, e);
-        }
-    }
-    
     private JsonNode createInitialState() {
         ObjectNode initialState = objectMapper.createObjectNode();
         initialState.put("session_id", UUID.randomUUID().toString());
@@ -205,14 +186,6 @@ public class GenericGameContextManager {
         initialState.set("quest_progress", objectMapper.createObjectNode());
         initialState.set("timeline", objectMapper.createArrayNode());
         return initialState;
-    }
-    
-    private void saveState() {
-        try {
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(new File(stateFile), state);
-        } catch (IOException e) {
-            LOGGER.severe("Failed to save state: " + e.getMessage());
-        }
     }
     
     private JsonNode getCurrentLocation() {

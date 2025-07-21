@@ -20,11 +20,10 @@ public class GameContextManagerFactory {
     public static GenericGameContextManager createTSRBasicDnDManager(ClaudeAIService aiService) {
         // File paths
         String gameDataFile = "src/main/resources/dnd/tsr_basic_adventure.json";
-        String stateFile = "adventure_state.json";
         
         // Create the context manager
         GenericGameContextManager contextManager = new GenericGameContextManager(
-            gameDataFile, stateFile, aiService
+            gameDataFile, aiService
         );
         
         // Register D&D plugin
@@ -41,10 +40,9 @@ public class GameContextManagerFactory {
      */
     public static GenericGameContextManager createGenericManager(
             String gameDataFile, 
-            String stateFile, 
             ClaudeAIService aiService) {
         
-        return new GenericGameContextManager(gameDataFile, stateFile, aiService);
+        return new GenericGameContextManager(gameDataFile, aiService);
     }
     
     /**
