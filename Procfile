@@ -1,1 +1,1 @@
-web: serve -s build
+web: java -jar build/libs/ai-rpg-events.jar
