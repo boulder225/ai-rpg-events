@@ -451,13 +451,29 @@ public class RPGApiServer {
             switch (parsedCommand.type()) {
                 case "go" -> {
                     String toLocationId = parsedCommand.target();
-                    log.info("[MOVE] Player {} moving from {} to {}", playerId, playerState.currentLocationId(), toLocationId);
-                    playerState = RPGBusinessLogic.movePlayer(playerState, toLocationId);
+                    // Normalize toLocationId to a valid location ID
+                    String normalizedLocationId = toLocationId;
+                    if (!currentAdventure.locations().containsKey(toLocationId)) {
+                        // Try to match by name or partial match
+                        Optional<String> match = currentAdventure.locations().keySet().stream()
+                            .filter(id -> id.equalsIgnoreCase(toLocationId) || id.contains(toLocationId) || toLocationId.contains(id))
+                            .findFirst();
+                        if (match.isPresent()) {
+                            normalizedLocationId = match.get();
+                            log.info("[MOVE] Normalized movement target '{}' to valid location ID '{}'", toLocationId, normalizedLocationId);
+                        } else {
+                            log.warn("[MOVE] Invalid movement target '{}': not a valid location ID", toLocationId);
+                            // Optionally, return an error or fallback here
+                            break;
+                        }
+                    }
+                    log.info("[MOVE] Player {} moving from {} to {}", playerId, playerState.currentLocationId(), normalizedLocationId);
+                    playerState = RPGBusinessLogic.movePlayer(playerState, normalizedLocationId);
                     commandHandler.putPlayerState(playerId, playerState);
                     // Persist new location to in-memory state
                     ObjectNode changes = objectMapper.createObjectNode();
-                    changes.put("player_location", toLocationId);
-                    log.info("[MOVE] Persisting new player_location to in-memory state: {}", toLocationId);
+                    changes.put("player_location", normalizedLocationId);
+                    log.info("[MOVE] Persisting new player_location to in-memory state: {}", normalizedLocationId);
                     genericGameContextManager.updateState(changes);
                 }
                 case "heal" -> {
