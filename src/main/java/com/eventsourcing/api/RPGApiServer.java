@@ -45,6 +45,11 @@ public class RPGApiServer {
     private final String aiLanguage;
     private final GenericGameContextManager genericGameContextManager;
     
+    // CORS configuration
+    private static final String FRONTEND_ORIGIN = "https://ai-rpg-web-09a84ac28189.herokuapp.com";
+    private static final String ALLOWED_METHODS = "GET, POST, OPTIONS";
+    private static final String ALLOWED_HEADERS = "Content-Type, Authorization";
+
     public RPGApiServer(int port) throws IOException {
         // Load environment variables
         EnvLoader.loadDotEnv();
@@ -111,11 +116,17 @@ public class RPGApiServer {
         server.createContext("/api/ai/prompt", new AIPromptKISSHandler());
         server.createContext("/api/metrics", new MetricsHandler());
         server.createContext("/api/game/metadata", exchange -> {
-            if (!"GET".equals(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(405, 0);
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                sendMethodNotAllowed(exchange);
+                return;
+            }
+            setCorsHeaders(exchange);
             var metadata = gameSystem.getMetadata();
             var json = objectMapper.writeValueAsString(metadata);
             byte[] bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -128,10 +139,8 @@ public class RPGApiServer {
         // Global OPTIONS handler for CORS
         server.createContext("/", exchange -> {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
@@ -168,10 +177,8 @@ public class RPGApiServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
@@ -179,7 +186,7 @@ public class RPGApiServer {
                 sendMethodNotAllowed(exchange);
                 return;
             }
-            
+            setCorsHeaders(exchange);
             try {
                 var request = parseRequest(exchange, SessionCreateRequest.class);
                 
@@ -237,10 +244,8 @@ public class RPGApiServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
@@ -248,7 +253,7 @@ public class RPGApiServer {
                 sendMethodNotAllowed(exchange);
                 return;
             }
-            
+            setCorsHeaders(exchange);
             try {
                 var request = parseRequest(exchange, GameActionRequest.class);
                 
@@ -279,10 +284,8 @@ public class RPGApiServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
@@ -290,6 +293,7 @@ public class RPGApiServer {
                 sendMethodNotAllowed(exchange);
                 return;
             }
+            setCorsHeaders(exchange);
             try {
                 var sessionId = getQueryParam(exchange, "session_id");
                 if (sessionId == null) {
@@ -323,10 +327,8 @@ public class RPGApiServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
@@ -334,7 +336,7 @@ public class RPGApiServer {
                 sendMethodNotAllowed(exchange);
                 return;
             }
-            
+            setCorsHeaders(exchange);
             var aiMetrics = aiService.getMetrics();
             var metricsData = Map.of(
                 "context", Map.of(
@@ -760,8 +762,15 @@ public class RPGApiServer {
         return null;
     }
     
+    private void setCorsHeaders(HttpExchange exchange) {
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", ALLOWED_METHODS);
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", ALLOWED_HEADERS);
+        exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
+    }
+
     private void sendJsonResponse(HttpExchange exchange, Object response, int statusCode) throws IOException {
-        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        setCorsHeaders(exchange);
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         var responseBody = objectMapper.writeValueAsBytes(response);
         exchange.sendResponseHeaders(statusCode, responseBody.length);
@@ -771,7 +780,7 @@ public class RPGApiServer {
     }
     
     private void sendErrorResponse(HttpExchange exchange, String message, int statusCode) throws IOException {
-        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        setCorsHeaders(exchange);
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         var response = Map.of("success", false, "error", message);
         var responseBody = objectMapper.writeValueAsBytes(response);
@@ -782,7 +791,7 @@ public class RPGApiServer {
     }
     
     private void sendMethodNotAllowed(HttpExchange exchange) throws IOException {
-        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        setCorsHeaders(exchange);
         exchange.getResponseHeaders().add("Allow", "POST, OPTIONS");
         exchange.sendResponseHeaders(405, -1);
         exchange.close();
@@ -793,10 +802,8 @@ public class RPGApiServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.sendResponseHeaders(200, -1);
+                setCorsHeaders(exchange);
+                exchange.sendResponseHeaders(204, -1);
                 exchange.close();
                 return;
             }
@@ -804,6 +811,7 @@ public class RPGApiServer {
                 sendMethodNotAllowed(exchange);
                 return;
             }
+            setCorsHeaders(exchange);
             try {
                 var sessionId = getQueryParam(exchange, "session_id");
                 if (sessionId == null) {
