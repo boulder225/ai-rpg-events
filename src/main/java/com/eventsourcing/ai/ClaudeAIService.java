@@ -48,13 +48,13 @@ public class ClaudeAIService {
     public AIResponse generateGameMasterResponse(String context, String playerAction) {
         String requestId = java.util.UUID.randomUUID().toString().substring(0, 8);
         RPGLogger.setAIContext(config.claudeModel(), requestId);
-        
+        String primaryModel = config.claudeModel();
+        String fallbackModel = "claude-3-opus-20240229";
         try {
             if (!config.isConfigured()) {
                 log.warn("AI service not configured, returning fallback response");
-                return createFallbackResponse(playerAction);
+                return AIResponse.fallback("AI not configured", "not_configured", "none");
             }
-            
             var cacheKey = generateCacheKey(context, playerAction);
             var cachedResponse = cache.get(cacheKey);
             if (cachedResponse != null) {
@@ -62,22 +62,18 @@ public class ClaudeAIService {
                 metrics.recordCacheHit();
                 return cachedResponse;
             }
-            
             if (!rateLimiter.tryAcquire()) {
                 log.warn("Rate limit exceeded for GM response: requestId={}", requestId);
                 metrics.recordRateLimit();
-                return createFallbackResponse(playerAction, "Rate limit exceeded");
+                return AIResponse.fallback("Rate limit exceeded", "rate_limit", primaryModel);
             }
-            
             try {
                 var prompt = buildGameMasterPrompt(context, playerAction);
-                log.info("Calling Claude API for GM response: requestId={}, promptLength={}", requestId, prompt.length());
-                var response = callClaudeAPI(prompt);
-                
+                log.info("Calling Claude API for GM response: requestId={}, promptLength={}, model={}", requestId, prompt.length(), primaryModel);
+                var response = callClaudeAPI(prompt, primaryModel);
                 switch (response) {
                     case AIResponse.Success success -> {
-                        log.info("GM response successful: requestId={}, tokens={}, contentLength={}", 
-                            requestId, success.getTotalTokens(), success.content().length());
+                        log.info("GM response successful: requestId={}, tokens={}, contentLength={}, model={}", requestId, success.getTotalTokens(), success.content().length(), primaryModel);
                         metrics.recordRequest(true);
                         cache.put(cacheKey, response);
                         return response;
@@ -85,20 +81,42 @@ public class ClaudeAIService {
                     case AIResponse.Error error -> {
                         log.error("GM response failed: requestId={}, error={}", requestId, error.errorMessage());
                         metrics.recordRequest(false);
-                        return createFallbackResponse(playerAction, error.errorMessage());
+                        // Check for overload and try fallback model
+                        if (error.errorMessage() != null && (error.errorMessage().toLowerCase().contains("overloaded") || error.errorMessage().contains("529"))) {
+                            log.warn("Primary model overloaded, retrying with fallback model: {}", fallbackModel);
+                            try {
+                                var fallbackResponse = callClaudeAPI(prompt, fallbackModel);
+                                switch (fallbackResponse) {
+                                    case AIResponse.Success success2 -> {
+                                        log.info("Fallback model response successful: requestId={}, model={}", requestId, fallbackModel);
+                                        return success2;
+                                    }
+                                    case AIResponse.Fallback fallback2 -> {
+                                        log.warn("Fallback model returned fallback: requestId={}, model={}", requestId, fallbackModel);
+                                        return fallback2;
+                                    }
+                                    case AIResponse.Error error2 -> {
+                                        log.error("Fallback model also failed: requestId={}, model={}, error={}", requestId, fallbackModel, error2.errorMessage());
+                                        return AIResponse.fallback("Both primary and fallback Claude models overloaded.", "overloaded", fallbackModel);
+                                    }
+                                }
+                            } catch (Exception fallbackEx) {
+                                log.error("Exception during fallback model call: requestId={}, model={}, error={}", requestId, fallbackModel, fallbackEx.getMessage());
+                                return AIResponse.fallback("Both primary and fallback Claude models overloaded.", "overloaded", fallbackModel);
+                            }
+                        }
+                        return AIResponse.fallback(playerAction, error.errorMessage(), primaryModel);
                     }
                     default -> {
                         log.warn("Unexpected GM response type: requestId={}, type={}", requestId, response.getClass().getSimpleName());
                         return response;
                     }
                 }
-                
             } catch (Exception e) {
                 log.error("GM API call failed: requestId={}", requestId, e);
                 metrics.recordRequest(false);
-                return createFallbackResponse(playerAction, "AI service temporarily unavailable: " + e.getMessage());
+                return AIResponse.fallback("AI service temporarily unavailable: " + e.getMessage(), "exception", primaryModel);
             }
-            
         } finally {
             RPGLogger.clearAIContext();
         }
@@ -114,7 +132,7 @@ public class ClaudeAIService {
         try {
             if (!config.isConfigured()) {
                 log.warn("AI service not configured for NPC dialogue: npc={}", npcName);
-                return createFallbackNPCResponse(npcName, playerInput);
+                return AIResponse.fallback("AI not configured for NPC dialogue", "not_configured", config.claudeModel());
             }
             
             var cacheKey = generateCacheKey(npcName + personality, context + playerInput);
@@ -128,13 +146,13 @@ public class ClaudeAIService {
             if (!rateLimiter.tryAcquire()) {
                 log.warn("Rate limit exceeded for NPC dialogue: requestId={}, npc={}", requestId, npcName);
                 metrics.recordRateLimit();
-                return createFallbackNPCResponse(npcName, playerInput);
+                return AIResponse.fallback("Rate limit exceeded for NPC dialogue", "rate_limit", config.claudeModel());
             }
             
             try {
                 var prompt = buildNPCPrompt(npcName, personality, context, playerInput);
                 log.info("Calling Claude API for NPC dialogue: requestId={}, npc={}", requestId, npcName);
-                var response = callClaudeAPI(prompt);
+                var response = callClaudeAPI(prompt, config.claudeModel()); // Use primary model for NPC
                 
                 switch (response) {
                     case AIResponse.Success success -> {
@@ -175,13 +193,13 @@ public class ClaudeAIService {
         try {
             if (!config.isConfigured()) {
                 log.warn("AI service not configured for world event: eventType={}", eventType);
-                return createFallbackWorldEvent(eventType);
+                return AIResponse.fallback("AI not configured for world event", "not_configured", config.claudeModel());
             }
             
             try {
                 var prompt = buildWorldEventPrompt(eventType, context);
                 log.info("Calling Claude API for world event: requestId={}, eventType={}", requestId, eventType);
-                var response = callClaudeAPI(prompt);
+                var response = callClaudeAPI(prompt, config.claudeModel()); // Use primary model for world event
                 
                 switch (response) {
                     case AIResponse.Success success -> {
@@ -211,9 +229,9 @@ public class ClaudeAIService {
         }
     }
     
-    private AIResponse callClaudeAPI(String prompt) throws IOException, InterruptedException {
+    private AIResponse callClaudeAPI(String prompt, String model) throws IOException, InterruptedException {
         var requestBody = objectMapper.writeValueAsString(Map.of(
-            "model", config.claudeModel(),
+            "model", model,
             "max_tokens", config.maxTokens(),
             "temperature", config.temperature(),
             "messages", java.util.List.of(
@@ -245,7 +263,8 @@ public class ClaudeAIService {
         return AIResponse.success(
             content,
             usage.path("input_tokens").asInt(),
-            usage.path("output_tokens").asInt()
+            usage.path("output_tokens").asInt(),
+            model
         );
     }
     
@@ -334,19 +353,19 @@ public class ClaudeAIService {
                 "✨ Il mondo risponde alla tua azione con magia antica, anche se i dettagli rimangono misteriosi.";
         };
         
-        return AIResponse.fallback(fallbackText, reason);
+        return AIResponse.fallback(fallbackText, reason, config.claudeModel());
     }
     
     private AIResponse createFallbackNPCResponse(String npcName, String playerInput) {
         var fallbackText = String.format("💬 %s considera le tue parole pensierosamente, anche se la sua risposta sembra distante oggi.", npcName);
         
-        return AIResponse.fallback(fallbackText, "AI service not available");
+        return AIResponse.fallback(fallbackText, "AI service not available", config.claudeModel());
     }
     
     private AIResponse createFallbackWorldEvent(String eventType) {
         var fallbackText = String.format("🌍 Un %s si verifica nel mondo, i suoi effetti si propagano attraverso il regno.", eventType);
         
-        return AIResponse.fallback(fallbackText, "AI service not available");
+        return AIResponse.fallback(fallbackText, "AI service not available", config.claudeModel());
     }
     
     private String generateCacheKey(String... parts) {

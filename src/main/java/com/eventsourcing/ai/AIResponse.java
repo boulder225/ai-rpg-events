@@ -32,7 +32,8 @@ public sealed interface AIResponse permits AIResponse.Success, AIResponse.Fallba
         String content,
         int inputTokens,
         int outputTokens,
-        Instant timestamp
+        Instant timestamp,
+        String modelUsed
     ) implements AIResponse {
         
         /**
@@ -49,7 +50,8 @@ public sealed interface AIResponse permits AIResponse.Success, AIResponse.Fallba
     record Fallback(
         String content,
         String reason,
-        Instant timestamp
+        Instant timestamp,
+        String modelUsed
     ) implements AIResponse {}
     
     /**
@@ -74,15 +76,15 @@ public sealed interface AIResponse permits AIResponse.Success, AIResponse.Fallba
     /**
      * Create a successful AI response.
      */
-    static AIResponse success(String content, int inputTokens, int outputTokens) {
-        return new Success(content, inputTokens, outputTokens, Instant.now());
+    static AIResponse success(String content, int inputTokens, int outputTokens, String modelUsed) {
+        return new Success(content, inputTokens, outputTokens, Instant.now(), modelUsed);
     }
     
     /**
      * Create a fallback response with reason.
      */
-    static AIResponse fallback(String content, String reason) {
-        return new Fallback(content, reason, Instant.now());
+    static AIResponse fallback(String content, String reason, String modelUsed) {
+        return new Fallback(content, reason, Instant.now(), modelUsed);
     }
     
     /**
