@@ -454,10 +454,10 @@ public class RPGApiServer {
                     log.info("[MOVE] Player {} moving from {} to {}", playerId, playerState.currentLocationId(), toLocationId);
                     playerState = RPGBusinessLogic.movePlayer(playerState, toLocationId);
                     commandHandler.putPlayerState(playerId, playerState);
-                    // Persist new location to adventure_state.json
+                    // Persist new location to in-memory state
                     ObjectNode changes = objectMapper.createObjectNode();
                     changes.put("player_location", toLocationId);
-                    log.info("[MOVE] Persisting new player_location to adventure_state.json: {}", toLocationId);
+                    log.info("[MOVE] Persisting new player_location to in-memory state: {}", toLocationId);
                     genericGameContextManager.updateState(changes);
                 }
                 case "heal" -> {
